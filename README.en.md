@@ -55,11 +55,33 @@ Status  : charging
 
 ## Quick start
 
-### Prebuilt binary (easiest)
+### Option 1: One-click installer ⭐ best for non-developers
 
-Download `betop-battery.exe` from [Releases](../../releases) and double-click it.
+Download **`betop-battery-oneclick-v*.zip`** from [Releases](/releases),
+unzip it and double-click **安装.bat** (install.bat).
 
-### From source
+It automatically installs Python if missing, installs the dependencies,
+creates Desktop / Start Menu shortcuts and an uninstall entry, then launches
+the app — **one double-click in total**.
+
+**This path is not affected by Windows Smart App Control**, because it uses the
+signed Python already on the system instead of an unsigned executable.
+
+Uninstall: Windows *Settings → Apps → Installed apps* → 「北通手柄电量」.
+
+### Option 2: Prebuilt binaries (no Python needed)
+
+| File | Purpose |
+|---|---|
+| `betop-battery.exe` | tray version (no console window) |
+| `betop-battery-cli.exe` | command line version (keeps console output) |
+
+> ⚠️ Unsigned executables are blocked by Windows Smart App Control
+> (there is no per-app allow-list) — see
+> [the section below](#about-windows-smart-app-control).
+> If that happens, use Option 1 or Option 3.
+
+### Option 3: From source (developers)
 
 ```bash
 git clone https://github.com/oitsukiii/betop-battery.git
@@ -139,6 +161,20 @@ BETOP Kunpeng 20  ·  Battery 95%  ·  Battery mode
 
 > The overlay and the tray are **separate processes** — closing one does not affect the other.
 > If a game runs in exclusive fullscreen the overlay may be hidden; use borderless windowed mode.
+
+### Screenshots
+
+**General tab:**
+
+![GUI - general](docs/images/gui-general.png)
+
+**Tray icon tab** (the preview uses your real battery level):
+
+![GUI - tray icon](docs/images/gui-tray-icon.png)
+
+**Tray icon in the notification area:**
+
+![tray icon](docs/images/tray-icon.png)
 
 ## How it works
 
@@ -239,6 +275,17 @@ Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\CI\Policy' |
 
 ## Known limitations
 
+- **The controller reports 100% while charging.** This is the device's own
+  reading, not a parsing bug — captured raw frames:
+
+  | State | frame | `byte[2]` |
+  |---|---|---|
+  | on battery | `02 15 5D 00 50 …` | `0x5D` = **93%** |
+  | charging | `02 15 64 00 51 …` | `0x64` = **100%** |
+
+  We read `byte[2]` exactly the way the vendor client does, so this is
+  device-side (the charging circuit raises the measured voltage) and cannot be
+  fixed in software. Use the ⚡ charging icon rather than that 100%.
 - ⚠️ **Single controller only**: the app picks one matching interface and reads that one.
   With several controllers connected, behaviour may be unexpected. Multi-controller support
   is not implemented yet — feel free to open an issue describing your setup.
