@@ -41,6 +41,9 @@ class Settings:
     low_battery_threshold: int = 20
     """低于该电量时弹通知。"""
 
+    tray_enabled: bool = True
+    """是否显示系统托盘图标。"""
+
     notify_on_low: bool = True
     """是否启用低电量通知。"""
 
@@ -61,40 +64,40 @@ class Settings:
     # ---------------------------------------------------------------- 叠加层
 
     overlay_enabled: bool = False
-    """是否启用悬浮叠加层。"""
+    """是否启用 HUD（悬浮叠加层）。"""
 
     overlay_x: int = -1
-    """叠加层横坐标；-1 = 自动放到右下角。"""
+    """HUD 横坐标；-1 = 自动放到右下角。"""
 
     overlay_y: int = -1
-    """叠加层纵坐标；-1 = 自动放到右下角。"""
+    """HUD 纵坐标；-1 = 自动放到右下角。"""
 
     overlay_opacity: float = 0.78
-    """叠加层不透明度（0.2~1.0）。"""
+    """HUD 不透明度（0.2~1.0）。"""
 
     overlay_font_size: int = 14
-    """叠加层字号。"""
+    """HUD 字号。"""
 
     overlay_click_through: bool = False
-    """是否让鼠标穿透叠加层（游戏时开启，避免挡住操作）。"""
+    """HUD 是否锁定布局（鼠标穿透，游戏时开启；同时无法拖动）。"""
+
+    overlay_emoji: bool = True
+    """HUD 是否显示 emoji 图标（🎮 🔋 ⚡）。若字体不支持可关闭。"""
 
     overlay_show_device: bool = True
-    """叠加层是否显示手柄型号。"""
+    """HUD 是否显示手柄型号。"""
 
     overlay_show_battery: bool = True
-    """叠加层是否显示电量。"""
+    """HUD 是否显示电量。"""
 
     overlay_show_charging: bool = True
-    """叠加层是否显示充电状态。"""
-
-    overlay_refresh_seconds: int = 30
-    """叠加层自身的刷新间隔（秒）。"""
+    """HUD 是否显示充电状态。"""
 
     overlay_bg: str = "#0E0E12"
-    """叠加层背景色。"""
+    """HUD 背景色。"""
 
     overlay_fg: str = "#FFFFFF"
-    """叠加层文字颜色。"""
+    """HUD 文字颜色。"""
 
     @classmethod
     def load(cls) -> "Settings":

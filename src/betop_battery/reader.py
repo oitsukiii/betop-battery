@@ -17,6 +17,7 @@ from .devices import (
     find_device,
     load_descriptors,
 )
+from .state import DEFAULT_MAX_AGE, SharedStatus, load_status, save_status
 from .transport import (
     HIDAPI_AVAILABLE,
     HidError,
@@ -59,6 +60,11 @@ class BatteryStatus:
 class BatteryReader:
     """电量读取器（无状态，可重复调用）。
 
+    ⚠️ **当前版本以单手柄为前提开发**：``find_connected`` 会在所有匹配接口中
+    选一个（描述最具体者优先），并只读取它。同时连接多只手柄时，
+    行为可能不符合预期（例如只显示其中一只，或读数在两支之间跳变）。
+    多手柄支持见 README 的"已知限制"。
+
     Args:
         descriptors: 指定设备描述；默认自动从 ``devices/`` 目录加载
         device_id:   只使用指定 id 的型号（多手柄时有用）
@@ -97,16 +103,35 @@ class BatteryReader:
 
     # -- 主流程 -----------------------------------------------------------
 
-    def read(self, timeout: float = 2.0, drain_rounds: int = 30) -> BatteryStatus:
+    def read(self, timeout: float = 2.0, drain_rounds: int = 30,
+             source: str = "", max_cache_age: float = DEFAULT_MAX_AGE) -> BatteryStatus:
         """读取当前连接手柄的电量。
 
+        会优先复用**共享缓存**中足够新的读数：托盘、图形界面、HUD 是三个独立进程，
+        若各自去读 HID，会因为手柄电量本身在浮动而出现界面间数值不一致
+        （例如设置窗口 94%、托盘图标 93%）。复用同一份读数即可保持一致，
+        顺带减少轮询。
+
         Args:
-            timeout:      等待响应帧的秒数
-            drain_rounds: 发送查询前先丢弃多少轮旧数据
+            timeout:        等待响应帧的秒数
+            drain_rounds:   发送查询前先丢弃多少轮旧数据
+            source:         调用者标识（tray/gui/hud/cli），仅用于缓存溯源
+            max_cache_age:  缓存新鲜度窗口（秒）；``<=0`` 表示禁用缓存
 
         Returns:
             :class:`BatteryStatus`（失败时 ``error`` 有值，不会抛异常）。
         """
+        if max_cache_age > 0:
+            cached = load_status()
+            if cached is not None and cached.error is None and cached.age() <= max_cache_age:
+                return BatteryStatus(
+                    device_id=cached.device_id,
+                    device_name=cached.device_name,
+                    battery_percent=cached.battery_percent,
+                    charging=cached.charging,
+                    timestamp=cached.timestamp,
+                )
+
         if not HIDAPI_AVAILABLE:
             return BatteryStatus(error="未安装 hidapi（pip install hidapi）")
 
@@ -141,4 +166,14 @@ class BatteryReader:
         status.battery_percent = int(percent) if isinstance(percent, (int, float)) else None
         charging = status.fields.get("charging")
         status.charging = bool(charging) if charging is not None else None
+
+        # 写入共享缓存，供其它界面进程复用（保持显示一致）
+        save_status(SharedStatus(
+            battery_percent=status.battery_percent,
+            charging=status.charging,
+            device_id=status.device_id,
+            device_name=status.device_name,
+            timestamp=status.timestamp,
+            source=source,
+        ))
         return status

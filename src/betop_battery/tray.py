@@ -13,15 +13,17 @@ tkinter 要求 GUI 跑在主线程，与托盘的事件循环同处一个进程�
 
 from __future__ import annotations
 
+import os
 import threading
 import time
 from typing import Callable, Optional
 
-from .config import Settings
+from .config import Settings, config_path
 from .icon import ICON_SIZE, render_icon
 from .log import make_logger
 from .proc import spawn
 from .reader import BatteryReader, BatteryStatus
+from .state import load_status
 
 
 def _require_pystray():
@@ -54,6 +56,8 @@ class TrayApp:
         self._icon = None
         self._stop = threading.Event()
         self._notified_low = False
+        self._last_read = 0.0        # 上次真正读 HID 的时间
+        self._config_mtime = 0.0     # 用于检测设置文件变化
 
     # -- 对外 -------------------------------------------------------------
 
@@ -74,14 +78,70 @@ class TrayApp:
     # -- 轮询 -------------------------------------------------------------
 
     def _poll_loop(self) -> None:
-        """后台轮询循环：定时读取并刷新图标。"""
+        """统一的后台循环。
+
+        每 2 秒做一次**轻量检查**，只有到了刷新间隔才真正去读 HID：
+          1. 采纳共享缓存中更新的读数（别的界面刚读的）→ 三处显示保持一致
+          2. 检测 config.json 变化并热更新（图标样式、阈值、间隔等）
+          3. 响应"启用托盘图标"开关
+          4. 到点读取设备
+        """
         while not self._stop.is_set():
-            self.refresh()
-            self._stop.wait(max(5, int(self._settings.poll_seconds)))
+            self._sync_from_shared()
+            self._reload_settings_if_changed()
+
+            if not self._settings.tray_enabled:
+                self._log("设置里已关闭托盘图标，正在退出")
+                self._stop_icon()
+                return
+
+            if time.time() - self._last_read >= max(5, int(self._settings.poll_seconds)):
+                self.refresh()
+            self._stop.wait(2)
+
+    def _sync_from_shared(self) -> None:
+        """采用共享缓存中比当前更新的读数（保持界面间一致）。"""
+        shared = load_status()
+        if shared is None or shared.error or shared.timestamp <= self._status.timestamp:
+            return
+        self._status = BatteryStatus(
+            device_id=shared.device_id, device_name=shared.device_name,
+            battery_percent=shared.battery_percent, charging=shared.charging,
+            timestamp=shared.timestamp,
+        )
+        self._update_icon()
+
+    def _reload_settings_if_changed(self) -> None:
+        """检测 config.json 变化并应用（例如在设置界面换了图标样式）。"""
+        try:
+            mtime = os.path.getmtime(config_path())
+        except OSError:
+            return
+        if mtime <= self._config_mtime:
+            return
+        first = self._config_mtime == 0.0
+        self._config_mtime = mtime
+        if first:
+            return
+        new_settings = Settings.load()
+        # 位置类字段由 HUD 自己管理，这里只关心与托盘相关的
+        self._settings = new_settings
+        self._log("检测到设置变更，托盘已热更新")
+        self._update_icon()
+
+    def _stop_icon(self) -> None:
+        """收起托盘图标并结束进程。"""
+        self._stop.set()
+        if self._icon is not None:
+            try:
+                self._icon.stop()
+            except Exception:
+                pass
 
     def refresh(self) -> BatteryStatus:
         """立即读一次并刷新界面。"""
-        status = self._reader.read()
+        status = self._reader.read(source="tray")
+        self._last_read = time.time()
         self._status = status
         self._log(status.summary())
         self._update_icon()
@@ -182,8 +242,7 @@ class TrayApp:
                 self._log("已关闭叠加层开关（正在运行的叠加层可在其右键菜单里退出）")
 
         def do_quit(icon, item):
-            self._stop.set()
-            icon.stop()
+            self._stop_icon()
 
         interval_menu = pystray.Menu(
             *[

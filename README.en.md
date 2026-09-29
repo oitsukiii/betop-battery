@@ -118,7 +118,7 @@ with a live preview rendered from your real battery level), and **Overlay**
 
 You can also open it from the tray menu: **right-click → 设置…**
 
-## Overlay HUD
+## HUD (floating overlay)
 
 ```bash
 betop-battery overlay
@@ -132,8 +132,9 @@ BETOP Kunpeng 20  ·  Battery 95%  ·  Battery mode
 
 - **Drag with the mouse** to move it (position is remembered)
 - **Right-click menu**: refresh / click-through / toggle fields / reset position / close
-- **Click-through** (Windows): mouse events pass through, so it never blocks your game
-  - ⚠️ While enabled the window receives no mouse events; turn it off first to drag again
+- **Lock layout** (Windows): mouse events pass through, so it never blocks your game
+  - ⚠️ While locked the window receives no mouse events; unlock it first to drag again
+- **Emoji icons** (🎮 🔋 ⚡) — toggleable; opacity applies to them too
 - Opacity, font size and colors are configurable in the GUI
 
 > The overlay and the tray are **separate processes** — closing one does not affect the other.
@@ -238,6 +239,9 @@ Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\CI\Policy' |
 
 ## Known limitations
 
+- ⚠️ **Single controller only**: the app picks one matching interface and reads that one.
+  With several controllers connected, behaviour may be unexpected. Multi-controller support
+  is not implemented yet — feel free to open an issue describing your setup.
 - **Unsigned exe may be blocked by Smart App Control** (see above)
 - The controller must be awake (press a button)
 - The protocol may change with **firmware updates** — if it breaks, please open an issue with `probe dump` output
