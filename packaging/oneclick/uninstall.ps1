@@ -1,4 +1,4 @@
-# betop-battery 卸载脚本
+﻿# betop-battery 卸载脚本
 #
 # 做三件事：
 #   1. 删除程序目录（默认 %LOCALAPPDATA%\betop-battery）

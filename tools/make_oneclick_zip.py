@@ -85,8 +85,10 @@ def main() -> int:
             if not os.path.isfile(path):
                 continue
             if path.endswith(".ps1"):
-                # .ps1 必须带 BOM，否则 PowerShell 5.1 下中文乱码
-                with open(path, encoding="utf-8") as fp:
+                # .ps1 必须带 BOM，否则 PowerShell 5.1 下中文乱码。
+                # 仓库里的文件本身也带 BOM（方便直接 clone 运行），
+                # 所以这里要幂等：已经带了就不要再加一个。
+                with open(path, encoding="utf-8-sig") as fp:
                     data = fp.read()
                 zf.writestr(ZIP_PREFIX + rel, "\ufeff" + data)
             else:

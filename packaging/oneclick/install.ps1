@@ -1,4 +1,4 @@
-# betop-battery 一键安装脚本
+﻿# betop-battery 一键安装脚本
 #
 # 目标用户：不熟悉命令行的普通用户。
 # 用户只需要解压压缩包，然后双击「安装.bat」。
@@ -47,7 +47,7 @@ if (-not (Test-Path (Join-Path $SourceRoot "run.py"))) {
 
 $AppName = "北通手柄电量"
 $AppId = "betop-battery"
-$Version = "1.1.1"
+$Version = "1.2.0"
 
 function Write-Step($text) { Write-Host ""; Write-Host "==> $text" -ForegroundColor Cyan }
 function Write-Ok($text) { Write-Host "    $text" -ForegroundColor Green }
