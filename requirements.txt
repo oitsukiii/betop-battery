@@ -1,0 +1,8 @@
+# betop-battery 运行依赖
+#
+# 核心（读电量必需）
+hidapi>=0.14           # HID 访问（Windows 上会装预编译 wheel，无需编译器）
+
+# 托盘模式需要（只用命令行可以不装）
+pystray>=0.19          # 系统托盘图标
+Pillow>=10.0           # 绘制电量数字图标

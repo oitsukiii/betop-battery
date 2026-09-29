@@ -1,0 +1,69 @@
+{
+  "_README": [
+    "============================================================",
+    " 新型号模板 —— 复制本文件为 betop-<型号>.json 后按注释修改",
+    "============================================================",
+    "所有 offset 都是【整帧偏移】：0 = report_id，1 = header，2 起是负载。",
+    "这正好对应官方脚本里的 data.substr(n*2, 2) —— n 就是这里的 offset。",
+    "",
+    "调试方法（详见 docs/adapt-new-device.md）：",
+    "  1) 运行  betop-battery probe            # 看接口 + 原始帧",
+    "  2) 运行  betop-battery probe --watch    # 边充电边看，找变化的字节",
+    "  3) 填好本文件后运行  betop-battery once  # 验证",
+    " 4) 提 PR 时把 tested 里的信息填全，方便别人参考",
+    "",
+    "以 _ 开头的键都是注释，程序会忽略。"
+  ],
+
+  "id": "betop-REPLACE-ME",
+  "name": "北通<型号名> (<产品字符串>)",
+  "notes": "填写：连接方式、实测情况、与官方客户端对照结果等",
+
+  "match": {
+    "_comment": "怎么认出这个型号。用 probe 命令可以看到这些值。",
+    "vendor_id": "0x20BC",
+    "_vendor_id_note": "0x20BC 是北通的 USB 厂商 ID，一般不用改",
+    "product_id": "0x0000",
+    "_product_id_note": "用 probe 看真实 PID，例如鲲鹏20 是 0x5191",
+    "usage_page": "0xFF00",
+    "_usage_page_note": "厂商自定义接口通常是 0xFF00；不确定就先留空",
+    "product_string_contains": "",
+    "_product_string_note": "产品字符串关键字，如 BTP-KP20；留空表示不检查"
+  },
+
+  "query": {
+    "_comment": "发什么命令去要状态。header = (subcmd << 4) | cmd",
+    "report_id": "0x02",
+    "header": "0x15",
+    "_header_note": "0x15 表示 cmd=0x5 / subcmd=0x1（状态报告）。多数北通型号相同，个别型号 cmd 不同",
+    "write_lengths": [64, 32, 16],
+    "_write_lengths_note": "依次尝试的写入长度；如果 probe 里写不进去，试着加上别的长度"
+  },
+
+  "reply_header": "0x15",
+  "_reply_header_note": "响应帧的 header；一般与 query.header 相同",
+
+  "fields": {
+    "_comment": "从响应帧里取哪些字段。键名 battery_percent / charging 是约定名，别改",
+    "battery_percent": {
+      "offset": 2,
+      "type": "uint8",
+      "_note": "电量。若数值范围是 0~255 而不是 0~100，加 \"scale\": 0.3922"
+    },
+    "charging": {
+      "offset": 4,
+      "type": "uint8",
+      "mask": "0x0F",
+      "boolean": true,
+      "_note": "充电状态。如果该字节既含高 4 位别的信息，就用 mask 取需要的位"
+    }
+  },
+
+  "tested": {
+    "os": "",
+    "connection": "",
+    "date": "",
+    "sample_frame": "",
+    "sample_value": ""
+  }
+}

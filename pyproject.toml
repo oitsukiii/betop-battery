@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "betop-battery"
+version = "0.1.0"
+description = "读取北通（BETOP）手柄电量的开源工具 / Read battery level of BETOP gamepads"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "betop-battery contributors" }]
+keywords = ["betop", "gamepad", "controller", "battery", "hid", "北通", "手柄", "电量"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Win32 (MS Windows)",
+  "Intended Audience :: End Users/Desktop",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Topic :: System :: Hardware",
+]
+dependencies = ["hidapi>=0.14"]
+
+[project.optional-dependencies]
+tray = ["pystray>=0.19", "Pillow>=10.0"]
+dev = ["pytest>=7.0"]
+
+[project.scripts]
+betop-battery = "betop_battery.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/REPLACE-ME/betop-battery"
+Issues = "https://github.com/REPLACE-ME/betop-battery/issues"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+betop_battery = ["devices/*.json"]
