@@ -104,3 +104,21 @@ def test_build_script_targets_two_executables(build_module):
     tools = os.path.join(ROOT, "tools")
     for name in ("entry_tray.py", "entry_cli.py"):
         assert os.path.isfile(os.path.join(tools, name)), f"缺少入口 {name}"
+
+
+def test_version_is_consistent_across_files():
+    """版本号必须在 __init__.py 与 pyproject.toml 里保持一致。
+
+    真机踩过的坑：早期的版本升级脚本用字符串替换且没有断言，
+    替换失败时**静默无效果**，结果 git 标签已经是 v1.0.4、代码里却还是 1.0.2，
+    打出来的安装包文件名也跟着错。
+    """
+    import re
+
+    init = open(os.path.join(ROOT, "src", "betop_battery", "__init__.py"),
+                encoding="utf-8").read()
+    pyproject = open(os.path.join(ROOT, "pyproject.toml"), encoding="utf-8").read()
+
+    v1 = re.search(r'__version__\s*=\s*"([^"]+)"', init).group(1)
+    v2 = re.search(r'^version\s*=\s*"([^"]+)"', pyproject, re.M).group(1)
+    assert v1 == v2, f"版本号不一致：__init__.py={v1} pyproject.toml={v2}"

@@ -51,11 +51,29 @@
 
 ## 快速开始
 
-### 方式一：直接下载可执行文件（推荐普通用户）
+### 方式三：命令行工具 / 开发者方式
 
 到 [Releases](../../releases) 下载 `betop-battery.exe`，双击即可（托盘图标会出现）。
 
-### 方式二：从源码运行
+### 方式一（B）：一键安装包 ⭐ 推荐给不熟悉命令行的用户
+
+到 [Releases](../../releases) 下载 **`betop-battery-oneclick-v*.zip`**：
+
+1. **解压**
+2. **双击「安装.bat」**
+3. 完事 —— 剩下的全自动（检测/安装 Python、装依赖、建快捷方式、启动）
+
+```
+用户操作:  解压 → 双击一次 → 完成
+```
+
+**这个方式不受 Windows「智能应用控制」限制**（它使用系统里已有签名的 Python，
+而不是未签名的 exe）。所以**即使你被 exe 弹窗拦住了，这个方式也能用。**
+
+卸载：Windows「设置 → 应用 → 已安装的应用」里找到「北通手柄电量」，
+或双击安装目录（`%LOCALAPPDATA%\betop-battery`）里的「卸载.bat」。
+
+### 方式二：直接下载可执行文件（推荐普通用户）
 
 ```bash
 git clone https://github.com/oitsukiii/betop-battery.git
@@ -264,12 +282,14 @@ Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\CI\Policy' |
 
 也可以再建一个指向 `run.py gui` 的快捷方式用来打开设置界面。
 
-### Release 里的两个 exe 有什么区别
+### Release 里各个文件有什么区别
 
-| 文件 | 用途 |
-|---|---|
-| `betop-battery.exe` | **托盘版**（无控制台窗口）—— 普通用户双击即用 |
-| `betop-battery-cli.exe` | **命令行版**（有控制台）—— 脚本与高级用户 |
+| 文件 | 用途 | 需要 Python | 受 SAC 拦截 |
+|---|---|---|---|
+| `betop-battery-oneclick-v*.zip` | **一键安装包** ⭐ 最省事 | 自动安装 | ✅ 不受影响 |
+| `betop-battery.exe` | 托盘版（无控制台窗口）| 不需要 | ⚠️ 会被拦 |
+| `betop-battery-cli.exe` | 命令行版（有控制台）| 不需要 | ⚠️ 会被拦 |
+| `Source code (zip)` | 源码 | 需要自己装 | ✅ 不受影响 |
 
 ## 已知限制
 
