@@ -1,6 +1,8 @@
 # betop-battery
 
-**Read the battery level of BETOP (北通) gamepads — shown right in the Windows system tray.**
+**Read the battery level of BETOP (北通) gamepads — shown right in the Windows system tray or as an on-screen HUD.**
+
+![BETOP Kunpeng 20 with betop-battery](docs/images/hero.jpg)
 
 English · [简体中文](README.md)
 
@@ -18,13 +20,10 @@ English · [简体中文](README.md)
 
 ---
 
-![BETOP Kunpeng 20 with betop-battery](docs/images/hero.jpg)
-
----
-
 ## Table of contents
 
 - [Why](#why)
+  - [Safety](#safety)
 - [Features](#features)
 - [Quick start](#quick-start)
   - [Option 1: One-click installer ⭐ best for non-developers](#option-1-one-click-installer-best-for-non-developers)
@@ -65,10 +64,21 @@ And when the controller is connected through its **2.4G dongle**, the standard W
 **This tool talks directly to the receiver's vendor HID interface and reads the exact percentage.**
 No official client required.
 
-```
-Battery : 100%
-Status  : charging
-```
+---
+
+### Safety
+
+- ✅ **It never modifies the vendor client**: betop-battery is a **standalone
+  program** that only sends status queries to the receiver — it does not inject
+  into the official client or touch any of its files or settings
+- ✅ **No risk of damaging the controller**: it only **reads** state (using the
+  very same query the official client sends). No configuration is written, no
+  firmware is flashed, no lighting is changed, and uninstalling leaves nothing
+  behind on the device
+- ✅ **No risk of being treated as a cheat**: it never touches game processes,
+  game memory or game files — it is just a system tray utility that reads a
+  peripheral's battery level
+
 ---
 
 ## Features
@@ -81,11 +91,8 @@ Status  : charging
 - ✅ **Low-battery notification** (threshold and interval configurable)
 - ✅ **CLI mode** (`once` / `--json`) for scripting
 - ✅ **Data-driven**: adding a new model means adding one JSON file — no code changes
-- ✅ **Independent and safe**: it never touches the vendor client, only reads device
-  status over HID (the same query the official client sends). No configuration is
-  written, no firmware is flashed, no game process is touched — so there is no risk of
-  damaging the controller or being flagged as a cheat.
 - ✅ **Built-in `probe` tooling** so you can adapt your own controller
+- ✅ **Bilingual UI**: Simplified Chinese and English
 ---
 
 ## Quick start
@@ -149,8 +156,6 @@ betop-battery probe dump         # dump raw frames (debugging)
 betop-battery probe suggest      # draft a descriptor for a new model
 ```
 
-> **Tip:** if the controller is asleep, press any button and retry.
-> The official client can stay open — it does not conflict.
 ---
 
 ## How it works & adapting
@@ -184,7 +189,7 @@ Full frame spec, command table and field semantics: **[docs/protocol.md](docs/pr
 | Model | Status | Connection | Contributor |
 |---|---|---|---|
 | **BETOP Kunpeng 20** (BTP-KP20EB) | ✅ Verified | 2.4G dongle | initial release |
-| Other BETOP models | 🙋 **waiting for you** | — | [guide](docs/adapt-new-device.md) |
+| Other BETOP models | 🙋 **contributions welcome** | — | [guide](docs/adapt-new-device.md) |
 
 BETOP models share one **protocol family** (the same `report_id + (subcmd<<4|cmd)` frame layout),
 so adapting a new model usually means changing a few numbers. **PRs welcome!**
@@ -202,7 +207,7 @@ betop-battery once               # verify
 ```
 
 Step-by-step tutorial: **[docs/adapt-new-device.md](docs/adapt-new-device.md)**
-(Chinese; AI agents should read **[AGENTS.md](AGENTS.md)** instead.)
+(Chinese; 💡 AI agents should read **[AGENTS.md](AGENTS.md)** instead.)
 ---
 
 ## Interface
@@ -231,14 +236,13 @@ betop-battery overlay
 A semi-transparent bar pinned on screen, similar to a framerate overlay:
 
 ```
-BETOP Kunpeng 20  ·  Battery 95%  ·  Battery mode
+BETOP Kunpeng 20  ·  Battery 95%
 ```
 
 - **Drag with the mouse** to move it (position is remembered)
 - **Right-click menu**: refresh / click-through / toggle fields / reset position / close
 - **Lock layout** (Windows): mouse events pass through, so it never blocks your game
   - ⚠️ While locked the window receives no mouse events; unlock it first to drag again
-- **Emoji icons** (🎮 🔋 ⚡) — toggleable; opacity applies to them too
 - Opacity, font size and colors are configurable in the GUI
 
 > The overlay and the tray are **separate processes** — closing one does not affect the other.
@@ -278,13 +282,13 @@ Compact mode (model hidden in the settings):
   | charging | `02 15 64 00 51 …` | `0x64` = **100%** |
 
   We read `byte[2]` exactly the way the vendor client does, so this is
-  device-side (the charging circuit raises the measured voltage) and cannot be
-  fixed in software. Use the ⚡ charging icon rather than that 100%.
+  probably device-side (the charging circuit raising the measured voltage) and
+  cannot be fixed in software. Use the ⚡ charging icon rather than that 100%.
 - ⚠️ **Single controller only**: the app picks one matching interface and reads that one.
   With several controllers connected, behaviour may be unexpected. Multi-controller support
   is not implemented yet — feel free to open an issue describing your setup.
-- **Unsigned exe may be blocked by Smart App Control** (see above)
-- The controller must be awake (press a button)
+- **The controller must be awake**: it does not report while asleep — press any
+  button on it and retry. The official client can stay open at the same time.
 - The protocol may change with **firmware updates** — if it breaks, please open an issue with `probe dump` output
 - Verified on Windows 11 with the 2.4G dongle (Bluetooth mode untested)
 - Some firmwares are picky about **write length**; configurable per device
