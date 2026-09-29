@@ -31,6 +31,7 @@ import os
 from dataclasses import dataclass, field
 from typing import Any, Iterable, Optional
 
+from . import i18n
 from .protocol import Frame
 from .transport import HidInterface
 
@@ -188,6 +189,12 @@ class DeviceDescriptor:
     notes: str = ""
     tested: dict[str, Any] = field(default_factory=dict)
     source: str = ""             # 来源文件名，便于报错定位
+    name_en: str = ""            # 英文界面下显示的型号名（可选）
+
+    @property
+    def display_name(self) -> str:
+        """按当前界面语言返回型号名。"""
+        return i18n.device_name(self.name, self.name_en or None)
 
     # 便捷访问器 -----------------------------------------------------------
     @property
@@ -275,6 +282,7 @@ def parse_descriptor(data: dict[str, Any], source: str = "<memory>") -> DeviceDe
         notes=str(data.get("notes") or ""),
         tested=dict(data.get("tested") or {}),
         source=source,
+        name_en=str(data.get("name_en") or ""),
     )
 
 

@@ -22,5 +22,5 @@
 
 from .reader import BatteryReader, BatteryStatus
 
-__version__ = "1.0.6"
+__version__ = "1.1.0"
 __all__ = ["BatteryReader", "BatteryStatus", "__version__"]

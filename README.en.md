@@ -18,6 +18,8 @@ English · [简体中文](README.md)
 
 ---
 
+![BETOP Kunpeng 20 with betop-battery](docs/images/hero.jpg)
+
 ## Why
 
 BETOP's official client **does not show an exact battery percentage** — it only maps LED colors to ranges:
@@ -179,6 +181,14 @@ BETOP Kunpeng 20  ·  Battery 95%  ·  Battery mode
 **Tray icon in the notification area:**
 
 ![tray icon](docs/images/tray-icon.png)
+
+### HUD screenshots
+
+![HUD with model and battery](docs/images/hud-with-model.png)
+
+Compact mode (model hidden in the settings):
+
+![HUD battery only](docs/images/hud-compact.png)
 
 ## How it works
 

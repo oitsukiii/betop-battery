@@ -11,6 +11,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
+from . import i18n
 from .devices import (
     DEVICES_DIR,
     DeviceDescriptor,
@@ -79,10 +80,7 @@ class BatteryReader:
         if device_id:
             self._descriptors = [d for d in self._descriptors if d.id == device_id]
         if not self._descriptors:
-            raise ValueError(
-                "没有可用的设备描述文件（devices/*.json）。"
-                "请检查是否缺少文件或 id 过滤条件写错了。"
-            )
+            raise ValueError(i18n.t("err_no_descriptors"))
 
     # -- 只读查询 ---------------------------------------------------------
 
@@ -133,7 +131,7 @@ class BatteryReader:
                 )
 
         if not HIDAPI_AVAILABLE:
-            return BatteryStatus(error="未安装 hidapi（pip install hidapi）")
+            return BatteryStatus(error=i18n.t("err_no_hidapi"))
 
         try:
             desc, iface = self.find_connected()
@@ -142,11 +140,11 @@ class BatteryReader:
 
         if desc is None or iface is None:
             return BatteryStatus(
-                device_name="未找到手柄",
-                error="未检测到受支持的手柄（请按一下手柄按键唤醒，或确认接收器已插好）",
+                device_name=i18n.t("no_device"),
+                error=i18n.t("err_no_device"),
             )
 
-        status = BatteryStatus(device_id=desc.id, device_name=desc.name)
+        status = BatteryStatus(device_id=desc.id, device_name=desc.display_name)
         try:
             with HidSession(iface.path) as session:
                 session.drain(rounds=drain_rounds)
@@ -157,7 +155,7 @@ class BatteryReader:
             return status
 
         if frame is None:
-            status.error = "未收到状态响应（手柄可能处于休眠，按一下按键再试）"
+            status.error = i18n.t("err_no_response")
             return status
 
         status.raw_frame = frame.raw

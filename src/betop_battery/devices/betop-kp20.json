@@ -1,8 +1,8 @@
 {
   "id": "betop-kp20",
   "name": "北通鲲鹏20 (BTP-KP20EB)",
+  "name_en": "BETOP Kunpeng 20 (BTP-KP20EB)",
   "notes": "已在 Windows 11 + 2.4G 接收器（USB\\VID_20BC&PID_5191）实测通过：电量与充电状态均正确，且与官方客户端显示的充电状态一致。协议来自对官方 Electron 客户端的互操作性分析。",
-
   "match": {
     "vendor_id": "0x20BC",
     "product_id": "0x5191",
@@ -12,16 +12,17 @@
     "_usage_note": "该接收器有 4 个接口，靠 usage 区分：0x03=厂商、0x02=鼠标、0x06=键盘、0x05=手柄。",
     "product_string_contains": "BTP-KP20"
   },
-
   "query": {
     "report_id": "0x02",
     "header": "0x15",
-    "write_lengths": [64, 32, 16],
+    "write_lengths": [
+      64,
+      32,
+      16
+    ],
     "_comment": "header 0x15 = (subcmd 0x1 << 4) | cmd 0x5 → 请求「状态报告」"
   },
-
   "reply_header": "0x15",
-
   "fields": {
     "battery_percent": {
       "offset": 2,
@@ -36,7 +37,6 @@
       "_comment": "整帧第 4 字节的低 4 位，非 0 表示充电中"
     }
   },
-
   "tested": {
     "os": "Windows 11 (10.0.26200)",
     "connection": "2.4G 接收器",

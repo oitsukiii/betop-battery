@@ -50,6 +50,9 @@ class Settings:
     device_id: str = ""
     """只读取指定型号（留空 = 自动）。"""
 
+    language: str = "auto"
+    """界面语言：auto（跟随系统）/ zh（简体中文）/ en（English）。"""
+
     # ---------------------------------------------------------------- 图标外观
 
     icon_style: str = "number"

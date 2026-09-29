@@ -125,16 +125,23 @@ def test_version_is_consistent_across_files():
 
 
 def test_tray_menu_uses_hud_naming():
-    """托盘菜单里必须叫「HUD」，不能出现「叠加层」。"""
+    """托盘菜单项必须叫 HUD（现在走 i18n，中文也不该出现「叠加层」）。"""
     src = open(os.path.join(ROOT, "src", "betop_battery", "tray.py"),
                encoding="utf-8").read()
-    assert '"叠加层"' not in src, "托盘菜单仍有「叠加层」字样"
-    assert '"HUD"' in src, "托盘菜单缺少 HUD 项"
+    assert "叠加层" not in src, "托盘菜单仍有「叠加层」字样"
+    assert 'i18n.t("menu_hud")' in src, "托盘菜单缺少 HUD 项"
+    # 两种语言的文案本身也要对
+    from betop_battery import i18n
+
+    i18n.set_language("zh")
+    assert i18n.t("menu_hud") == "HUD"
+    i18n.set_language("en")
+    assert i18n.t("menu_hud") == "HUD"
 
 
 def test_tray_default_action_opens_settings():
     """左键单击/双击托盘图标应打开设置窗口（而不是只刷新）。"""
     src = open(os.path.join(ROOT, "src", "betop_battery", "tray.py"),
                encoding="utf-8").read()
-    assert 'pystray.MenuItem("设置…", open_settings, default=True)' in src, \
+    assert 'i18n.t("menu_settings"), open_settings, default=True' in src, \
         "默认菜单项应设为「设置…」"

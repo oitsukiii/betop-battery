@@ -18,6 +18,7 @@ import threading
 import time
 from typing import Callable, Optional
 
+from . import i18n
 from .config import Settings, config_path
 from .icon import ICON_SIZE, render_icon
 from .log import make_logger
@@ -50,9 +51,10 @@ class TrayApp:
                  on_log: Optional[Callable[[str], None]] = None) -> None:
         self._reader = reader
         self._settings = settings or Settings.load()
+        i18n.set_language(self._settings.language)
         # 默认用安全日志：打包成无控制台的 exe 后 print 会失败，那时自动写文件
         self._log = on_log or make_logger()
-        self._status = BatteryStatus(device_name="正在读取…", timestamp=0.0)   # timestamp=0：保证任何真实读数都能覆盖占位状态
+        self._status = BatteryStatus(device_name=i18n.t("reading"), timestamp=0.0)   # timestamp=0：保证任何真实读数都能覆盖占位状态
         self._icon = None
         self._stop = threading.Event()
         self._notified_low = False
@@ -67,11 +69,11 @@ class TrayApp:
         self._icon = pystray.Icon(
             "betop-battery",
             icon=self._render_icon(),
-            title="北通手柄电量",
+            title=i18n.t("app_name"),
             menu=self._build_menu(),
         )
         threading.Thread(target=self._poll_loop, daemon=True).start()
-        self._log("托盘已启动，右键图标可查看菜单。")
+        self._log(i18n.t("tray_started"))
         self._icon.run()
         return 0
 
@@ -91,7 +93,7 @@ class TrayApp:
             self._reload_settings_if_changed()
 
             if not self._settings.tray_enabled:
-                self._log("设置里已关闭托盘图标，正在退出")
+                self._log(i18n.t("tray_disabled"))
                 self._stop_icon()
                 return
 
@@ -128,7 +130,8 @@ class TrayApp:
         new_settings = Settings.load()
         # 位置类字段由 HUD 自己管理，这里只关心与托盘相关的
         self._settings = new_settings
-        self._log("检测到设置变更，托盘已热更新")
+        i18n.set_language(new_settings.language)
+        self._log(i18n.t("settings_changed_tray"))
         self._update_icon()
 
     def _stop_icon(self) -> None:
@@ -170,13 +173,15 @@ class TrayApp:
         """悬浮提示文本。"""
         status = self._status
         if status.error:
-            return f"北通手柄电量\n{status.error}"
-        lines = [status.device_name or "北通手柄"]
+            return i18n.t("app_name") + "\n" + status.error
+        lines = [status.device_name or i18n.t("device_default")]
         if status.battery_percent is not None:
-            lines.append(f"电量：{status.battery_percent}%")
+            lines.append(i18n.t("tooltip_battery", n=status.battery_percent))
         if status.charging is not None:
-            lines.append("状态：充电中" if status.charging else "状态：使用电池")
-        lines.append("更新：" + time.strftime("%H:%M:%S", time.localtime(status.timestamp)))
+            state = i18n.t("charging") if status.charging else i18n.t("on_battery")
+            lines.append(i18n.t("tooltip_status", s=state))
+        stamp = time.strftime("%H:%M:%S", time.localtime(status.timestamp))
+        lines.append(i18n.t("tooltip_updated", time=stamp))
         return "\n".join(lines)
 
     def _maybe_notify(self, status: BatteryStatus) -> None:
@@ -191,8 +196,8 @@ class TrayApp:
                 self._notified_low = True
                 try:
                     self._icon.notify(
-                        f"电量仅剩 {status.battery_percent}%，该充电了",
-                        "北通手柄电量",
+                        i18n.t("notify_low_body", n=status.battery_percent),
+                        i18n.t("app_name"),
                     )
                 except Exception:
                     pass
@@ -209,21 +214,21 @@ class TrayApp:
             def handler(icon, item):
                 self._settings.poll_seconds = seconds
                 self._settings.save()
-                self._log(f"刷新间隔已设为 {seconds}s")
+                self._log(i18n.t("menu_interval") + ": " + i18n.t("seconds", n=seconds))
             return handler
 
         def set_threshold(value: int):
             def handler(icon, item):
                 self._settings.low_battery_threshold = value
                 self._settings.save()
-                self._log(f"低电量阈值已设为 {value}%")
+                self._log(i18n.t("low_battery_threshold") + ": " + str(value) + "%")
                 self._notified_low = False
             return handler
 
         def toggle_notify(icon, item):
             self._settings.notify_on_low = not self._settings.notify_on_low
             self._settings.save()
-            self._log(f"低电量通知：{'开' if self._settings.notify_on_low else '关'}")
+            self._log(i18n.t("menu_notify") + ": " + ("on" if self._settings.notify_on_low else "off"))
 
         def do_refresh(icon, item):
             self.refresh()
@@ -233,11 +238,11 @@ class TrayApp:
 
             已经开着就把它拉到前台，避免重复弹出多个设置窗口。
             """
-            if focus_window("betop-battery 设置"):
-                self._log("设置窗口已在前台")
+            if focus_window(i18n.t("window_title")):
+                self._log(i18n.t("settings_foreground"))
                 return
             if spawn("gui") is None:
-                self._log("打开设置界面失败（可能是缺少 tkinter）")
+                self._log(i18n.t("settings_open_failed"))
 
         def toggle_overlay(icon, item):
             """一键开关 HUD，并把状态写进设置（供界面与下次启动使用）。"""
@@ -245,9 +250,9 @@ class TrayApp:
             self._settings.save()
             if self._settings.overlay_enabled:
                 spawn("overlay")
-                self._log("已启动 HUD")
+                self._log(i18n.t("started_hud"))
             else:
-                self._log("已关闭 HUD 开关（正在运行的 HUD 会在下次检查时自行退出）")
+                self._log(i18n.t("stopped_hud"))
 
         def do_quit(icon, item):
             self._stop_icon()
@@ -255,7 +260,7 @@ class TrayApp:
         interval_menu = pystray.Menu(
             *[
                 pystray.MenuItem(
-                    f"{sec} 秒",
+                    i18n.t("seconds", n=sec),
                     set_interval(sec),
                     checked=lambda item, s=sec: self._settings.poll_seconds == s,
                     radio=True,
@@ -277,23 +282,23 @@ class TrayApp:
         return pystray.Menu(
             # default=True 的项会在**左键单击 / 双击图标**时触发。
             # 按 Windows 习惯，默认动作设成"打开设置窗口"。
-            pystray.MenuItem("设置…", open_settings, default=True),
-            pystray.MenuItem("立即刷新", do_refresh),
+            pystray.MenuItem(i18n.t("menu_settings"), open_settings, default=True),
+            pystray.MenuItem(i18n.t("refresh_now"), do_refresh),
             pystray.MenuItem(
-                "HUD",
+                i18n.t("menu_hud"),
                 toggle_overlay,
                 checked=lambda item: self._settings.overlay_enabled,
             ),
             pystray.Menu.SEPARATOR,
-            pystray.MenuItem("刷新间隔", interval_menu),
-            pystray.MenuItem("低电量提醒", threshold_menu),
+            pystray.MenuItem(i18n.t("menu_interval"), interval_menu),
+            pystray.MenuItem(i18n.t("menu_threshold"), threshold_menu),
             pystray.MenuItem(
-                "启用通知",
+                i18n.t("menu_notify"),
                 toggle_notify,
                 checked=lambda item: self._settings.notify_on_low,
             ),
             pystray.Menu.SEPARATOR,
-            pystray.MenuItem("退出", do_quit),
+            pystray.MenuItem(i18n.t("menu_quit"), do_quit),
         )
 
 

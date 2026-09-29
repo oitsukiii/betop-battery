@@ -17,6 +17,8 @@
 
   "id": "betop-REPLACE-ME",
   "name": "北通<型号名> (<产品字符串>)",
+  "name_en": "BETOP <Model> (<product string>)",
+  "_name_en_note": "英文界面下显示的型号名；可留空（留空则英文界面也显示中文名）",
   "notes": "填写：连接方式、实测情况、与官方客户端对照结果等",
 
   "match": {

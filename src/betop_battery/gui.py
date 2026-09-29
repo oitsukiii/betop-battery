@@ -26,6 +26,7 @@ import tkinter as tk
 from tkinter import colorchooser, messagebox, ttk
 from typing import Optional
 
+from . import i18n
 from .config import Settings, config_path
 from .icon import COLOR_SCHEMES, ICON_SIZE, IconStyle, render_icon
 from .log import make_logger
@@ -33,13 +34,24 @@ from .proc import spawn
 from .reader import BatteryReader, BatteryStatus
 from .state import load_status
 
-WINDOW_TITLE = "betop-battery 设置"
+WINDOW_TITLE = "betop-battery 设置"   # 兜底值；实际用 i18n.t("window_title")
 
-STYLE_LABELS = {
-    "number": "数字方块（清晰醒目）",
-    "ring": "圆环进度（简洁）",
-    "battery": "电池外形（直观）",
-}
+#: 配色方案键（显示名在运行时按语言取）
+SCHEME_KEYS = ("auto", "mono")
+
+
+def style_labels() -> dict:
+    """图标样式键 → 当前语言的显示名。"""
+    return {
+        "number": i18n.t("style_number"),
+        "ring": i18n.t("style_ring"),
+        "battery": i18n.t("style_battery"),
+    }
+
+
+def scheme_labels() -> dict:
+    """配色方案键 → 当前语言的显示名。"""
+    return {"auto": i18n.t("scheme_auto"), "mono": i18n.t("scheme_mono")}
 
 #: 刷新间隔预设（秒）—— 用下拉而不是自由输入，避免填出无意义的数值
 INTERVAL_PRESETS = (15, 30, 60, 120, 300, 600)
@@ -104,8 +116,9 @@ class SettingsWindow:
     def __init__(self, reader: BatteryReader, settings: Optional[Settings] = None) -> None:
         self._reader = reader
         self._settings = settings or Settings.load()
+        i18n.set_language(self._settings.language)
         self._log = make_logger()
-        self._status = BatteryStatus(device_name="读取中…", timestamp=0.0)   # timestamp=0：保证任何真实读数都能覆盖占位状态
+        self._status = BatteryStatus(device_name=i18n.t("reading"), timestamp=0.0)   # timestamp=0：保证任何真实读数都能覆盖占位状态
         self._queue: "queue.Queue[BatteryStatus]" = queue.Queue()
         self._stop_event = threading.Event()
         self._hud_proc = None           # 由本界面启动的 HUD 进程（用于关闭时结束它）
@@ -116,7 +129,7 @@ class SettingsWindow:
         self._last_render_signature = None   # 用于避免重复重绘预览
 
         self._root = tk.Tk()
-        self._root.title(WINDOW_TITLE)
+        self._root.title(i18n.t("window_title"))
         self._root.geometry("620x560")
         self._root.minsize(480, 380)
         self._vars: dict[str, tk.Variable] = {}
@@ -139,9 +152,9 @@ class SettingsWindow:
         general = ScrollableFrame(notebook)
         icon_tab = ScrollableFrame(notebook)
         hud_tab = ScrollableFrame(notebook)
-        notebook.add(general, text="  常规  ")
-        notebook.add(icon_tab, text="  托盘图标  ")
-        notebook.add(hud_tab, text="  HUD  ")
+        notebook.add(general, text=f"  {i18n.t('tab_general')}  ")
+        notebook.add(icon_tab, text=f"  {i18n.t('tab_tray')}  ")
+        notebook.add(hud_tab, text=f"  {i18n.t('tab_hud')}  ")
 
         self._build_general(general.inner)
         self._build_icon(icon_tab.inner)
@@ -154,14 +167,14 @@ class SettingsWindow:
         footer = ttk.Frame(self._root, padding=(12, 6, 12, 10))
         footer.pack(side="bottom", fill="x")
 
-        ttk.Button(footer, text="关闭", command=self._on_close).pack(side="right")
-        ttk.Button(footer, text="应用", command=self._apply_now).pack(side="right", padx=8)
+        ttk.Button(footer, text=i18n.t("close"), command=self._on_close).pack(side="right")
+        ttk.Button(footer, text=i18n.t("apply"), command=self._apply_now).pack(side="right", padx=8)
 
         self._footer_hint = ttk.Label(footer, text="", foreground="#1e7d22",
                                       font=("Microsoft YaHei UI", 9))
         self._footer_hint.pack(side="left")
 
-        path_label = ttk.Label(footer, text=f"设置文件：{config_path()}", foreground="#888",
+        path_label = ttk.Label(footer, text=f"{i18n.t('settings_file')}{config_path()}", foreground="#888",
                                font=("Microsoft YaHei UI", 8))
         path_label.pack(side="left", padx=(12, 0))
 
@@ -169,10 +182,10 @@ class SettingsWindow:
 
     def _build_status_card(self) -> None:
         """顶部：当前手柄状态（大号电量数字）。"""
-        card = ttk.LabelFrame(self._root, text=" 当前状态 ")
+        card = ttk.LabelFrame(self._root, text=f" {i18n.t('current_status')} ")
         card.pack(side="top", fill="x", padx=12, pady=(10, 6))
 
-        self._device_label = ttk.Label(card, text="正在读取…",
+        self._device_label = ttk.Label(card, text=i18n.t("reading"),
                                        font=("Microsoft YaHei UI", 11))
         self._device_label.pack(anchor="w", padx=12, pady=(6, 0))
 
@@ -183,7 +196,7 @@ class SettingsWindow:
         self._battery_label.pack(side="left")
         self._charging_label = ttk.Label(row, text="", font=("Microsoft YaHei UI", 11))
         self._charging_label.pack(side="left", padx=12, pady=(12, 0))
-        ttk.Button(row, text="立即刷新", command=self._refresh_now).pack(side="right", pady=(8, 0))
+        ttk.Button(row, text=i18n.t("refresh_now"), command=self._refresh_now).pack(side="right", pady=(8, 0))
 
         self._updated_label = ttk.Label(card, text="", foreground="#666",
                                         font=("Microsoft YaHei UI", 9))
@@ -192,25 +205,45 @@ class SettingsWindow:
     # -- 常规 --------------------------------------------------------------
 
     def _build_general(self, parent) -> None:
-        """常规设置。"""
-        ttk.Label(parent, text="刷新间隔（托盘与 HUD 共用）",
-                  font=("Microsoft YaHei UI", 10, "bold")).grid(row=0, column=0, sticky="w",
-                                                                padx=16, pady=(14, 2))
-        # 预设之外的旧值（例如早期版本允许自由输入 5 秒）也要出现在下拉里，
-        # 否则控件会显示一个"列表里选不到"的值，用户会困惑。
+        """常规设置（第一项就是界面语言）。"""
+        # ---- 界面语言 ----
+        ttk.Label(parent, text=i18n.t("language"),
+                  font=("Microsoft YaHei UI", 10, "bold")).grid(
+            row=0, column=0, sticky="w", padx=16, pady=(14, 2))
+        self._lang_map = {i18n.AUTO_NAME[i18n.current_language()]: "auto"}
+        for code in i18n.LANGUAGES:
+            self._lang_map[i18n.LANGUAGE_NAMES[code]] = code
+        current = self._settings.language or "auto"
+        label_now = next((k for k, v in self._lang_map.items() if v == current), None)
+        if label_now is None:                       # 配置里存了个奇怪的值
+            label_now = i18n.AUTO_NAME[i18n.current_language()]
+        lang_box = ttk.Combobox(parent, state="readonly", width=12,
+                                values=list(self._lang_map.keys()))
+        lang_box.set(label_now)
+        lang_box.grid(row=0, column=1, sticky="w", padx=8, pady=(14, 2))
+        lang_box.bind("<<ComboboxSelected>>", lambda _e: self._schedule_apply())
+        self._lang_box = lang_box
+        ttk.Label(parent, text=i18n.t("hint_restart"), foreground="#888",
+                  font=("Microsoft YaHei UI", 8)).grid(row=0, column=2, sticky="w", padx=4)
+
+        # ---- 刷新间隔 ----
+        ttk.Label(parent, text=i18n.t("refresh_interval"),
+                  font=("Microsoft YaHei UI", 10, "bold")).grid(
+            row=1, column=0, sticky="w", padx=16, pady=(12, 2))
         choices = list(INTERVAL_PRESETS)
         if self._settings.poll_seconds not in choices:
             choices.append(self._settings.poll_seconds)
             choices.sort()
         interval = ttk.Combobox(parent, state="readonly", width=12,
-                                values=[f"{sec} 秒" for sec in choices])
-        interval.set(f"{self._settings.poll_seconds} 秒")
-        interval.grid(row=0, column=1, sticky="w", padx=8, pady=(14, 2))
+                                values=[i18n.t("seconds", n=sec) for sec in choices])
+        interval.set(i18n.t("seconds", n=self._settings.poll_seconds))
+        interval.grid(row=1, column=1, sticky="w", padx=8, pady=(12, 2))
+        interval.bind("<<ComboboxSelected>>", lambda _e: self._schedule_apply())
         self._interval_box = interval
 
-        ttk.Label(parent, text="低电量提醒阈值").grid(row=1, column=0, sticky="w",
-                                                      padx=16, pady=6)
-        # 预设之外的历史值也要出现在下拉里（早期版本是自由输入）
+        # ---- 低电量阈值 ----
+        ttk.Label(parent, text=i18n.t("low_battery_threshold")).grid(
+            row=2, column=0, sticky="w", padx=16, pady=6)
         thresholds = list(THRESHOLD_PRESETS)
         if self._settings.low_battery_threshold not in thresholds:
             thresholds.append(self._settings.low_battery_threshold)
@@ -218,69 +251,70 @@ class SettingsWindow:
         threshold_box = ttk.Combobox(parent, state="readonly", width=10,
                                      values=[f"{pct}%" for pct in thresholds])
         threshold_box.set(f"{self._settings.low_battery_threshold}%")
-        threshold_box.grid(row=1, column=1, sticky="w", padx=8)
+        threshold_box.grid(row=2, column=1, sticky="w", padx=8)
         threshold_box.bind("<<ComboboxSelected>>", lambda _e: self._schedule_apply())
         self._threshold_box = threshold_box
 
+        # ---- 通知开关 ----
         self._vars["notify_on_low"] = tk.BooleanVar(value=self._settings.notify_on_low)
-        ttk.Checkbutton(parent, text="低于阈值时弹出系统通知",
-                        variable=self._vars["notify_on_low"]).grid(row=2, column=0, columnspan=2,
-                                                                   sticky="w", padx=16, pady=4)
+        ttk.Checkbutton(parent, text=i18n.t("notify_on_low"),
+                        variable=self._vars["notify_on_low"]).grid(
+            row=3, column=0, columnspan=2, sticky="w", padx=16, pady=4)
 
-        ttk.Separator(parent, orient="horizontal").grid(row=3, column=0, columnspan=3,
-                                                        sticky="ew", padx=16, pady=12)
+        ttk.Separator(parent, orient="horizontal").grid(
+            row=4, column=0, columnspan=3, sticky="ew", padx=16, pady=12)
 
+        # ---- 型号过滤 ----
         self._vars["device_id"] = tk.StringVar(value=self._settings.device_id)
-        ttk.Label(parent, text="只读取指定型号 id（留空 = 自动识别）").grid(row=4, column=0,
-                                                                           sticky="w", padx=16)
-        ttk.Entry(parent, textvariable=self._vars["device_id"], width=22).grid(row=4, column=1,
-                                                                               sticky="w", padx=8)
-        ttk.Button(parent, text="查看已支持型号",
-                   command=self._show_devices).grid(row=4, column=2, sticky="w", padx=4)
+        ttk.Label(parent, text=i18n.t("device_filter")).grid(row=5, column=0, sticky="w", padx=16)
+        ttk.Entry(parent, textvariable=self._vars["device_id"], width=22).grid(
+            row=5, column=1, sticky="w", padx=8)
+        ttk.Button(parent, text=i18n.t("view_devices"),
+                   command=self._show_devices).grid(row=5, column=2, sticky="w", padx=4)
 
-        hint = ("提示：手柄休眠时读不到数据，按一下手柄按键即可。\n"
-                "官方客户端可以同时开着，不冲突。\n"
-                "当前版本针对「单只手柄」开发，同时连接多只手柄可能出现意外表现。")
+        # ---- 提示 ----
+        hint = "\n".join([i18n.t("hint_sleep"), i18n.t("hint_official"), i18n.t("hint_single")])
         ttk.Label(parent, text=hint, foreground="#777", justify="left").grid(
-            row=5, column=0, columnspan=3, sticky="w", padx=16, pady=(18, 12))
+            row=6, column=0, columnspan=3, sticky="w", padx=16, pady=(18, 12))
 
     # -- 托盘图标 ----------------------------------------------------------
 
     def _build_icon(self, parent) -> None:
         """托盘图标外观：启用开关、样式、配色、充电标记，带实时预览。"""
         self._vars["tray_enabled"] = tk.BooleanVar(value=self._settings.tray_enabled)
-        ttk.Checkbutton(parent, text="启用托盘图标（通知区域显示电量）",
+        ttk.Checkbutton(parent, text=i18n.t("tray_enabled"),
                         variable=self._vars["tray_enabled"],
                         command=self._on_tray_toggle).grid(row=0, column=0, columnspan=2,
                                                            sticky="w", padx=16, pady=(14, 2))
-        ttk.Label(parent, text="（勾选立即出现，取消立即消失）",
+        ttk.Label(parent, text=i18n.t("tray_enabled_hint"),
                   foreground="#888", font=("Microsoft YaHei UI", 8)).grid(
             row=1, column=0, columnspan=2, sticky="w", padx=32, pady=(0, 10))
 
-        ttk.Label(parent, text="图标样式", font=("Microsoft YaHei UI", 10, "bold")).grid(
+        ttk.Label(parent, text=i18n.t("icon_style"), font=("Microsoft YaHei UI", 10, "bold")).grid(
             row=2, column=0, sticky="w", padx=16, pady=(6, 2))
         self._vars["icon_style"] = tk.StringVar(value=self._settings.icon_style)
-        for offset, (key, label) in enumerate(STYLE_LABELS.items()):
+        for offset, (key, label) in enumerate(style_labels().items()):
             ttk.Radiobutton(parent, text=label, value=key, variable=self._vars["icon_style"],
                             command=self._update_preview).grid(row=3 + offset, column=0,
                                                                sticky="w", padx=32, pady=2)
 
-        base = 3 + len(STYLE_LABELS)
-        ttk.Label(parent, text="配色方案", font=("Microsoft YaHei UI", 10, "bold")).grid(
+        base = 3 + len(style_labels())
+        ttk.Label(parent, text=i18n.t("color_scheme"), font=("Microsoft YaHei UI", 10, "bold")).grid(
             row=base + 1, column=0, sticky="w", padx=16, pady=(12, 2))
         self._vars["icon_scheme"] = tk.StringVar(value=self._settings.icon_scheme)
-        for offset, (key, label) in enumerate(COLOR_SCHEMES.items()):
+        for offset, (key, label) in enumerate(scheme_labels().items()):
             ttk.Radiobutton(parent, text=label, value=key, variable=self._vars["icon_scheme"],
                             command=self._update_preview).grid(row=base + 2 + offset, column=0,
                                                                sticky="w", padx=32, pady=2)
 
         self._vars["icon_show_charging_marker"] = tk.BooleanVar(
             value=self._settings.icon_show_charging_marker)
-        ttk.Checkbutton(parent, text="显示充电标记", variable=self._vars["icon_show_charging_marker"],
+        ttk.Checkbutton(parent, text=i18n.t("show_charging_marker"),
+                        variable=self._vars["icon_show_charging_marker"],
                         command=self._update_preview).grid(row=base + 4, column=0, sticky="w",
                                                            padx=16, pady=(12, 10))
 
-        preview = ttk.LabelFrame(parent, text=" 预览（使用当前真实电量） ")
+        preview = ttk.LabelFrame(parent, text=f" {i18n.t('preview')} ")
         preview.grid(row=2, column=1, rowspan=base + 4, sticky="n", padx=20, pady=(14, 10))
         self._preview_label = ttk.Label(preview, text="")
         self._preview_label.pack(expand=True, pady=18, padx=18)
@@ -290,64 +324,64 @@ class SettingsWindow:
     def _build_hud(self, parent) -> None:
         """HUD 设置：开关、外观、显示内容、锁定布局、位置复位。"""
         self._vars["overlay_enabled"] = tk.BooleanVar(value=self._settings.overlay_enabled)
-        ttk.Checkbutton(parent, text="启用 HUD（在屏幕上常驻显示电量，类似帧数叠加层）",
+        ttk.Checkbutton(parent, text=i18n.t("hud_enabled"),
                         variable=self._vars["overlay_enabled"],
                         command=self._on_hud_toggle).grid(row=0, column=0, columnspan=2,
                                                           sticky="w", padx=16, pady=(14, 2))
-        ttk.Label(parent, text="（刷新间隔与「常规」页共用）", foreground="#888",
+        ttk.Label(parent, text=i18n.t("hud_interval_hint"), foreground="#888",
                   font=("Microsoft YaHei UI", 8)).grid(row=1, column=0, columnspan=2,
                                                        sticky="w", padx=32, pady=(0, 10))
 
-        ttk.Label(parent, text="透明度").grid(row=2, column=0, sticky="w", padx=16, pady=6)
+        ttk.Label(parent, text=i18n.t("opacity")).grid(row=2, column=0, sticky="w", padx=16, pady=6)
         self._vars["overlay_opacity"] = tk.DoubleVar(value=self._settings.overlay_opacity)
         ttk.Scale(parent, from_=0.2, to=1.0, variable=self._vars["overlay_opacity"],
                   command=lambda *_: self._schedule_apply()).grid(row=2, column=1, sticky="ew",
                                                                   padx=8, pady=6)
 
-        ttk.Label(parent, text="字号").grid(row=3, column=0, sticky="w", padx=16, pady=6)
+        ttk.Label(parent, text=i18n.t("font_size")).grid(row=3, column=0, sticky="w", padx=16, pady=6)
         self._vars["overlay_font_size"] = tk.IntVar(value=self._settings.overlay_font_size)
         ttk.Spinbox(parent, from_=8, to=40, width=8, textvariable=self._vars["overlay_font_size"],
                     command=self._schedule_apply).grid(row=3, column=1, sticky="w", padx=8)
 
-        ttk.Label(parent, text="显示内容", font=("Microsoft YaHei UI", 10, "bold")).grid(
+        ttk.Label(parent, text=i18n.t("display_content"), font=("Microsoft YaHei UI", 10, "bold")).grid(
             row=4, column=0, sticky="w", padx=16, pady=(14, 2))
         checks = ttk.Frame(parent)
         checks.grid(row=5, column=0, columnspan=2, sticky="w", padx=32)
-        for key, label in (("overlay_show_device", "型号"),
-                           ("overlay_show_battery", "电量")):
+        for key, label in (("overlay_show_device", i18n.t("show_device")),
+                           ("overlay_show_battery", i18n.t("show_battery"))):
             self._vars[key] = tk.BooleanVar(value=getattr(self._settings, key))
             ttk.Checkbutton(checks, text=label, variable=self._vars[key],
                             command=self._schedule_apply).pack(side="left", padx=(0, 14))
 
-        ttk.Label(parent, text="充电状态始终展示：用电池显示 🔋，充电中显示 ⚡",
+        ttk.Label(parent, text=i18n.t("charging_always"),
                   foreground="#666", font=("Microsoft YaHei UI", 9)).grid(
             row=6, column=0, columnspan=2, sticky="w", padx=32, pady=(6, 0))
 
         self._vars["overlay_click_through"] = tk.BooleanVar(
             value=self._settings.overlay_click_through)
-        ttk.Checkbutton(parent, text="锁定布局（鼠标穿透，游戏时推荐；锁定后需先取消才能拖动）",
+        ttk.Checkbutton(parent, text=i18n.t("lock_layout"),
                         variable=self._vars["overlay_click_through"],
                         command=self._schedule_apply).grid(row=7, column=0, columnspan=2,
                                                            sticky="w", padx=16, pady=(8, 2))
 
         colors = ttk.Frame(parent)
         colors.grid(row=8, column=0, columnspan=2, sticky="w", padx=16, pady=(12, 0))
-        ttk.Label(colors, text="背景色").pack(side="left")
+        ttk.Label(colors, text=i18n.t("bg_color")).pack(side="left")
         self._bg_btn = tk.Button(colors, width=4, bg=self._settings.overlay_bg,
                                  command=lambda: self._pick_color("overlay_bg", self._bg_btn))
         self._bg_btn.pack(side="left", padx=(6, 18))
-        ttk.Label(colors, text="文字色").pack(side="left")
+        ttk.Label(colors, text=i18n.t("fg_color")).pack(side="left")
         self._fg_btn = tk.Button(colors, width=4, bg=self._settings.overlay_fg,
                                  command=lambda: self._pick_color("overlay_fg", self._fg_btn))
         self._fg_btn.pack(side="left", padx=6)
 
         pos = ttk.Frame(parent)
         pos.grid(row=9, column=0, columnspan=2, sticky="w", padx=16, pady=(14, 4))
-        ttk.Button(pos, text="复位", command=self._reset_hud_position).pack(side="left")
-        ttk.Label(pos, text="（初始位置在屏幕右下角；平时直接用鼠标拖动 HUD 即可，位置会自动记住）",
+        ttk.Button(pos, text=i18n.t("reset"), command=self._reset_hud_position).pack(side="left")
+        ttk.Label(pos, text=i18n.t("reset_hint"),
                   foreground="#888", font=("Microsoft YaHei UI", 8)).pack(side="left", padx=10)
 
-        ttk.Label(parent, text="提示：若游戏以独占全屏运行，HUD 可能不可见 —— 请把游戏设为「无边框窗口」。",
+        ttk.Label(parent, text=i18n.t("fullscreen_hint"),
                   foreground="#777", justify="left", wraplength=520).grid(
             row=10, column=0, columnspan=2, sticky="w", padx=16, pady=(14, 12))
         parent.columnconfigure(1, weight=1)
@@ -413,7 +447,7 @@ class SettingsWindow:
     def _render_status(self, status: BatteryStatus) -> None:
         """把状态画到顶部卡片。"""
         if status.error:
-            self._device_label.configure(text=status.device_name or "未找到手柄")
+            self._device_label.configure(text=status.device_name or i18n.t("no_device"))
             self._battery_label.configure(text="--", foreground="#999")
             self._charging_label.configure(text=status.error)
         else:
@@ -421,9 +455,11 @@ class SettingsWindow:
             self._battery_label.configure(
                 text=f"{status.battery_percent}%",
                 foreground="#1e7d22" if (status.battery_percent or 0) > 20 else "#c62828")
-            self._charging_label.configure(text="充电中 ⚡" if status.charging else "使用电池")
+            self._charging_label.configure(
+                text=("⚡ " + i18n.t("charging")) if status.charging else i18n.t("on_battery"))
         self._updated_label.configure(
-            text="更新于 " + time.strftime("%H:%M:%S", time.localtime(status.timestamp)))
+            text=i18n.t("updated_at",
+                        time=time.strftime("%H:%M:%S", time.localtime(status.timestamp))))
 
     def _update_preview(self) -> None:
         """重绘托盘图标预览。"""
@@ -469,7 +505,8 @@ class SettingsWindow:
 
     def _pick_color(self, field: str, button: tk.Button) -> None:
         """取色器。"""
-        chosen = colorchooser.askcolor(color=getattr(self._settings, field), title="选择颜色")
+        chosen = colorchooser.askcolor(color=getattr(self._settings, field),
+                                       title=i18n.t("choose_color"))
         if chosen and chosen[1]:
             setattr(self._settings, field, chosen[1])
             button.configure(bg=chosen[1])
@@ -488,7 +525,7 @@ class SettingsWindow:
         fresh.overlay_reset_token += 1
         fresh.save()
         self._settings = fresh
-        self._flash_hint("已请求 HUD 复位到右下角")
+        self._flash_hint(i18n.t("reset_requested"))
 
     def _on_tray_toggle(self) -> None:
         """勾选/取消「启用托盘图标」。
@@ -501,7 +538,7 @@ class SettingsWindow:
         self._apply_now()
         if enabled:
             self._tray_proc = spawn("tray")
-            self._flash_hint("已启动托盘图标")
+            self._flash_hint(i18n.t("started_tray"))
         else:
             if self._tray_proc is not None:
                 try:
@@ -509,7 +546,7 @@ class SettingsWindow:
                 except Exception:
                     pass
                 self._tray_proc = None
-            self._flash_hint("已关闭托盘图标")
+            self._flash_hint(i18n.t("stopped_tray"))
 
     def _on_hud_toggle(self) -> None:
         """勾选/取消"启用 HUD"。
@@ -523,7 +560,7 @@ class SettingsWindow:
         self._apply_now()
         if enabled:
             self._hud_proc = spawn("overlay")
-            self._flash_hint("已启动 HUD")
+            self._flash_hint(i18n.t("started_hud"))
         else:
             if self._hud_proc is not None:
                 try:
@@ -531,7 +568,7 @@ class SettingsWindow:
                 except Exception:
                     pass
                 self._hud_proc = None
-            self._flash_hint("已关闭 HUD")
+            self._flash_hint(i18n.t("stopped_hud"))
 
     def _schedule_apply(self) -> None:
         """延迟一小会儿再落盘（滑杆拖动时避免频繁写文件）。"""
@@ -555,9 +592,14 @@ class SettingsWindow:
             self._collect_settings_into(fresh)   # 不包含 X/Y 与复位令牌
             fresh.save()
             self._settings = fresh
-            self._flash_hint("已应用 ✓")
+            i18n.set_language(fresh.language)
+            try:                                    # 语言变了就顺手更新标题
+                self._root.title(i18n.t("window_title"))
+            except Exception:
+                pass
+            self._flash_hint(i18n.t("applied"))
         except Exception as exc:
-            self._flash_hint(f"应用失败：{exc}", error=True)
+            self._flash_hint(i18n.t("apply_failed", err=exc), error=True)
 
     def _flash_hint(self, text: str, error: bool = False) -> None:
         """在底部显示一条短提示（几秒后自动消失）。"""
@@ -579,6 +621,7 @@ class SettingsWindow:
             except Exception:
                 return default
 
+        s.language = self._lang_map.get(str(self._lang_box.get()), "auto")
         s.poll_seconds = self._current_interval()
         s.low_battery_threshold = self._current_threshold()
         s.notify_on_low = bool(get("notify_on_low", True))
@@ -606,8 +649,8 @@ class SettingsWindow:
     def _show_devices(self) -> None:
         """列出内置支持的型号。"""
         lines = [f"{d.id} —— {d.name}" for d in self._reader.supported_devices]
-        messagebox.showinfo("已支持的型号",
-                            "\n".join(lines) + "\n\n适配新型号请看 docs/adapt-new-device.md",
+        messagebox.showinfo(i18n.t("supported_models"),
+                            "\n".join(lines) + "\n\n" + i18n.t("adapt_hint"),
                             parent=self._root)
 
     # ------------------------------------------------------------------ 运行

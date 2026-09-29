@@ -32,6 +32,7 @@ import threading
 import tkinter as tk
 from typing import Optional
 
+from . import i18n
 from .config import Settings, config_path
 from .log import make_logger
 from .reader import BatteryReader, BatteryStatus
@@ -75,6 +76,7 @@ class OverlayWindow:
     def __init__(self, reader: BatteryReader, settings: Optional[Settings] = None) -> None:
         self._reader = reader
         self._settings = settings or Settings.load()
+        i18n.set_language(self._settings.language)
         self._log = make_logger()
         self._queue: "queue.Queue[BatteryStatus]" = queue.Queue()
         self._status = BatteryStatus(device_name="读取中…", timestamp=0.0)   # timestamp=0：保证任何真实读数都能覆盖占位状态
@@ -302,26 +304,27 @@ class OverlayWindow:
         self._settings.overlay_x = self._fg.winfo_x()
         self._settings.overlay_y = self._fg.winfo_y()
         self._settings.save()
-        self._log(f"HUD 位置已保存：({self._settings.overlay_x}, {self._settings.overlay_y})")
+        self._log(i18n.t("position_saved",
+                         x=self._settings.overlay_x, y=self._settings.overlay_y))
 
     def _on_right_click(self, _event) -> None:
         """右键菜单：常用开关。"""
         menu = tk.Menu(self._root, tearoff=0)
-        menu.add_command(label="立即刷新", command=self._request_refresh)
+        menu.add_command(label=i18n.t("refresh_now"), command=self._request_refresh)
         menu.add_separator()
         var_lock = tk.BooleanVar(value=self._settings.overlay_click_through)
-        menu.add_checkbutton(label="锁定布局（鼠标穿透）", variable=var_lock,
+        menu.add_checkbutton(label=i18n.t("lock_layout"), variable=var_lock,
                              command=lambda: self._toggle("overlay_click_through", var_lock))
-        for field, label in (("overlay_show_device", "显示型号"),
-                             ("overlay_show_battery", "显示电量")):
+        for field, label in (("overlay_show_device", i18n.t("show_device")),
+                             ("overlay_show_battery", i18n.t("show_battery"))):
             var = tk.BooleanVar(value=getattr(self._settings, field))
             menu.add_checkbutton(label=label, variable=var,
                                  command=lambda f=field, v=var: self._toggle(f, v))
         menu.add_separator()
-        menu.add_command(label="复位到右下角", command=self._reset_position)
-        menu.add_command(label="打开设置界面", command=self._open_settings)
+        menu.add_command(label=i18n.t("reset"), command=self._reset_position)
+        menu.add_command(label=i18n.t("menu_settings"), command=self._open_settings)
         menu.add_separator()
-        menu.add_command(label="关闭 HUD", command=self._quit)
+        menu.add_command(label=i18n.t("close"), command=self._quit)
         try:
             menu.tk_popup(_event.x_root, _event.y_root)
         finally:
@@ -429,10 +432,11 @@ class OverlayWindow:
             return False
 
         new_settings = Settings.load()
+        i18n.set_language(new_settings.language)
         # 设置里关掉了 HUD → 自行退出（这修好了"取消勾选不生效"的问题）
         if not new_settings.overlay_enabled:
             self._settings = new_settings
-            self._log("设置里已关闭 HUD，正在退出")
+            self._log(i18n.t("hud_disabled"))
             self._quit()
             return True
 
@@ -440,8 +444,7 @@ class OverlayWindow:
                            != self._settings.overlay_reset_token)
         self._settings = new_settings
         self._apply_settings(reset_position=reset_requested)
-        self._log("检测到设置变更，HUD 已热更新"
-                  + ("（位置已复位）" if reset_requested else ""))
+        self._log(i18n.t("settings_changed_hud"))
         return False
 
     def _render_text(self) -> None:
@@ -476,7 +479,7 @@ class OverlayWindow:
 
     def run(self) -> int:
         """启动 HUD（阻塞）。"""
-        self._log("HUD 已启动：拖动可移动，右键有菜单")
+        self._log(i18n.t("hud_started"))
         threading.Thread(target=self._poll_loop, daemon=True).start()
         self._root.after(200, self._tick)
         try:
