@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """以子进程方式启动本程序的其它子命令。
 
-为什么需要：托盘、图形界面、叠加层是三个**独立进程**，各自有独立的事件循环。
+为什么需要：托盘、图形界面、HUD 是三个**独立进程**，各自有独立的事件循环。
 把 tkinter 窗口塞进托盘的进程会踩到"GUI 必须跑在主线程"的限制，
 分开进程后彼此互不干扰，崩一个也不影响另一个。
 
@@ -58,3 +58,32 @@ def spawn(*args: str, hidden: bool = True) -> Optional[subprocess.Popen]:
         return subprocess.Popen(build_command(*args), **kwargs)
     except Exception:
         return None
+
+
+def focus_window(title: str) -> bool:
+    """如果存在标题匹配的窗口，把它置前并返回 True（仅 Windows）。
+
+    用途：托盘图标被点击时打开设置窗口。若用户已经开着一个设置窗口，
+    与其再弹一个，不如把已有的那个拉到前台 —— 这也是 Windows 上的通常做法。
+
+    Args:
+        title: 目标窗口标题（精确匹配）
+
+    Returns:
+        是否找到并激活了窗口。
+    """
+    if os.name != "nt":
+        return False
+    try:
+        import ctypes
+
+        user32 = ctypes.windll.user32
+        hwnd = user32.FindWindowW(None, title)
+        if not hwnd:
+            return False
+        SW_RESTORE = 9
+        user32.ShowWindow(hwnd, SW_RESTORE)
+        user32.SetForegroundWindow(hwnd)
+        return True
+    except Exception:
+        return False

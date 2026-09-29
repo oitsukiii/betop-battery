@@ -42,7 +42,7 @@
 - ✅ **精确电量百分比**（官方客户端只给范围）
 - ✅ **充电状态**识别
 - ✅ **托盘图标**：直接显示数字，鼠标悬停看详情（**3 种样式**可选）
-- ✅ **图形设置界面**：看状态、调样式、配叠加层，带实时预览
+- ✅ **图形设置界面**：看状态、调样式、配 HUD，带实时预览
 - ✅ **悬浮叠加层（HUD）**：像帧数那样常驻显示在游戏画面上，可拖动、可鼠标穿透
 - ✅ **低电量通知**：低于阈值弹系统通知（阈值/间隔可调）
 - ✅ **命令行模式**：`once` / `--json`，方便脚本与自动化调用
@@ -100,7 +100,7 @@ betop-battery                    # 读一次（默认）
 betop-battery once --json        # JSON 输出（便于脚本调用）
 betop-battery tray               # 托盘模式（通知区域显示电量）
 betop-battery gui                # 打开图形设置界面
-betop-battery overlay            # 启动悬浮叠加层（HUD）
+betop-battery overlay            # 启动 HUD
 betop-battery devices            # 查看已支持的型号
 betop-battery list               # 列出系统上的北通 HID 接口
 betop-battery probe interfaces   # 调试：列出全部接口
@@ -134,7 +134,7 @@ betop-battery gui
 | **托盘图标** | 切换 **3 种样式**（数字方块 / 圆环进度 / 电池外形）、配色方案、充电标记，**带真实电量的实时预览** |
 | **HUD** | 开关、透明度、字号、显示内容（型号/电量/充电）、emoji 图标、锁定布局、位置复位、背景与文字颜色 |
 
-在托盘图标上**右键 → 设置…** 也能打开。改动实时写入配置文件，叠加层会自动热更新。
+在托盘图标上**右键 → 设置…**（或直接**左键单击图标**）也能打开。改动实时写入配置文件，HUD 会自动热更新。
 
 ## HUD（悬浮叠加层）
 
@@ -210,10 +210,10 @@ src/betop_battery/
 ├── reader.py      编排：三者串成一次读取
 ├── icon.py        托盘图标绘制（3 种样式，纯函数）
 ├── tray.py        托盘交互（图标/菜单/通知）
-├── overlay.py     悬浮叠加层 HUD（tkinter）
+├── overlay.py     HUD（tkinter）
 ├── gui.py         图形设置界面（tkinter）
 ├── probe.py       调试/发现工具
-├── proc.py        以子进程启动自身（托盘/GUI/叠加层互相独立）
+├── proc.py        以子进程启动自身（托盘/GUI/HUD 互相独立）
 ├── log.py         安全日志（无控制台时自动写文件）
 ├── config.py      用户设置持久化
 └── cli.py         命令分发

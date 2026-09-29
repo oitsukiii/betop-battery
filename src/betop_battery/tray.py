@@ -21,7 +21,7 @@ from typing import Callable, Optional
 from .config import Settings, config_path
 from .icon import ICON_SIZE, render_icon
 from .log import make_logger
-from .proc import spawn
+from .proc import focus_window, spawn
 from .reader import BatteryReader, BatteryStatus
 from .state import load_status
 
@@ -229,19 +229,25 @@ class TrayApp:
             self.refresh()
 
         def open_settings(icon, item):
-            """打开图形设置界面（独立进程）。"""
+            """打开图形设置界面（独立进程）。
+
+            已经开着就把它拉到前台，避免重复弹出多个设置窗口。
+            """
+            if focus_window("betop-battery 设置"):
+                self._log("设置窗口已在前台")
+                return
             if spawn("gui") is None:
                 self._log("打开设置界面失败（可能是缺少 tkinter）")
 
         def toggle_overlay(icon, item):
-            """一键启动叠加层，并把状态写进设置。"""
+            """一键开关 HUD，并把状态写进设置（供界面与下次启动使用）。"""
             self._settings.overlay_enabled = not self._settings.overlay_enabled
             self._settings.save()
             if self._settings.overlay_enabled:
                 spawn("overlay")
-                self._log("已启动叠加层")
+                self._log("已启动 HUD")
             else:
-                self._log("已关闭叠加层开关（正在运行的叠加层可在其右键菜单里退出）")
+                self._log("已关闭 HUD 开关（正在运行的 HUD 会在下次检查时自行退出）")
 
         def do_quit(icon, item):
             self._stop_icon()
@@ -269,10 +275,12 @@ class TrayApp:
             ]
         )
         return pystray.Menu(
-            pystray.MenuItem("立即刷新", do_refresh, default=True),
-            pystray.MenuItem("设置…", open_settings),
+            # default=True 的项会在**左键单击 / 双击图标**时触发。
+            # 按 Windows 习惯，默认动作设成"打开设置窗口"。
+            pystray.MenuItem("设置…", open_settings, default=True),
+            pystray.MenuItem("立即刷新", do_refresh),
             pystray.MenuItem(
-                "叠加层",
+                "HUD",
                 toggle_overlay,
                 checked=lambda item: self._settings.overlay_enabled,
             ),

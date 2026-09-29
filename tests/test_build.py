@@ -122,3 +122,19 @@ def test_version_is_consistent_across_files():
     v1 = re.search(r'__version__\s*=\s*"([^"]+)"', init).group(1)
     v2 = re.search(r'^version\s*=\s*"([^"]+)"', pyproject, re.M).group(1)
     assert v1 == v2, f"版本号不一致：__init__.py={v1} pyproject.toml={v2}"
+
+
+def test_tray_menu_uses_hud_naming():
+    """托盘菜单里必须叫「HUD」，不能出现「叠加层」。"""
+    src = open(os.path.join(ROOT, "src", "betop_battery", "tray.py"),
+               encoding="utf-8").read()
+    assert '"叠加层"' not in src, "托盘菜单仍有「叠加层」字样"
+    assert '"HUD"' in src, "托盘菜单缺少 HUD 项"
+
+
+def test_tray_default_action_opens_settings():
+    """左键单击/双击托盘图标应打开设置窗口（而不是只刷新）。"""
+    src = open(os.path.join(ROOT, "src", "betop_battery", "tray.py"),
+               encoding="utf-8").read()
+    assert 'pystray.MenuItem("设置…", open_settings, default=True)' in src, \
+        "默认菜单项应设为「设置…」"
