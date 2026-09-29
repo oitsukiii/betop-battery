@@ -250,6 +250,20 @@ Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\CI\Policy' |
 
 > GitHub Release 的附件会被打上"来自互联网"标记，SAC 开启的用户同样会被拦截。
 
+### 让源码方式也一样方便（推荐做法）
+
+既然源码方式不受 SAC 影响，可以给自己建个**桌面快捷方式**，效果和双击 exe 一样：
+
+1. 生成应用图标（可选，仅需一次）：`python tools/make_icon.py`
+2. 新建快捷方式，目标填：
+   ```
+   pythonw.exe "C:\path\to\betop-battery\run.py" tray
+   ```
+   起始位置填项目目录，图标选 `assets\icon.ico`
+3. 用 `pythonw.exe`（不是 `python.exe`）→ **不会出现黑窗口**
+
+也可以再建一个指向 `run.py gui` 的快捷方式用来打开设置界面。
+
 ### Release 里的两个 exe 有什么区别
 
 | 文件 | 用途 |
