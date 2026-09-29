@@ -31,8 +31,7 @@ ZIP_PREFIX = "betop-battery/"
 #: 打进 zip 的内容（相对仓库根目录）
 INCLUDE_FILES = [
     "run.py", "conftest.py", "requirements.txt", "pyproject.toml",
-    "README.md", "README.en.md", "LICENSE", "CHANGELOG.md",
-    "CODE_SIGNING_POLICY.md", "AGENTS.md",
+    "README.md", "README.en.md", "LICENSE", "CHANGELOG.md", "AGENTS.md",
     "说明.txt",
 ]
 INCLUDE_DIRS = ["src", "tools", "docs", "packaging"]

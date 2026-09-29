@@ -51,6 +51,10 @@ Status  : charging
 - ✅ **Low-battery notification** (threshold and interval configurable)
 - ✅ **CLI mode** (`once` / `--json`) for scripting
 - ✅ **Data-driven**: adding a new model means adding one JSON file — no code changes
+- ✅ **Independent and safe**: it never touches the vendor client, only reads device
+  status over HID (the same query the official client sends). No configuration is
+  written, no firmware is flashed, no game process is touched — so there is no risk of
+  damaging the controller or being flagged as a cheat.
 - ✅ **Built-in `probe` tooling** so you can adapt your own controller
 
 ## Quick start
@@ -268,7 +272,7 @@ Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\CI\Policy' |
 | Situation | Recommendation |
 |---|---|
 | Personal use | **Run from source** (`python run.py tray`) — the Python interpreter is signed and unaffected |
-| Distributing an exe | Requires **code signing**; OSS projects can apply to [SignPath Foundation](https://signpath.org/) for free signing |
+| Distributing an exe | Requires **code signing** (individuals can buy an OV code signing certificate) |
 | Users hit the block | Point them to `pip install` / source; do **not** suggest disabling SAC (turning it off is irreversible without reinstalling Windows) |
 
 > Release attachments from GitHub also carry the "downloaded from the internet" mark, so SAC users are blocked there too.

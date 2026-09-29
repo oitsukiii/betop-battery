@@ -19,8 +19,13 @@
 ## 目录
 
 - [为什么做这个](#为什么做这个)
+  - [安全性与合规性](#安全性与合规性)
 - [特性](#特性)
 - [快速开始](#快速开始)
+  - [方式一：一键安装包 ⭐ 推荐给不熟悉命令行的用户](#方式一一键安装包-推荐给不熟悉命令行的用户)
+  - [方式二：直接下载可执行文件（无需 Python）](#方式二直接下载可执行文件无需-python)
+  - [方式三：从源码运行（开发者）](#方式三从源码运行开发者)
+  - [命令行用法](#命令行用法)
 - [支持的手柄](#支持的手柄)
 - [图形界面](#图形界面)
 - [HUD 悬浮层](#hud-悬浮层)
@@ -30,9 +35,10 @@
 - [测试](#测试)
 - [协议是怎么来的](#协议是怎么来的)
 - [关于 Windows 的智能应用控制](#关于-windows-的智能应用控制)
+  - [让源码方式也一样方便（推荐做法）](#让源码方式也一样方便推荐做法)
+  - [Release 里各个文件有什么区别](#release-里各个文件有什么区别)
 - [已知限制](#已知限制)
 - [贡献](#贡献)
-- [代码签名政策](#代码签名政策)
 - [许可](#许可)
 
 ---
@@ -52,6 +58,15 @@
 系统会认为它是"有线设备"，所有依赖标准 API 的工具（XInputBatteryMeter 等）都读不到。
 
 **本工具直接与接收器的厂商接口通信，读出精确百分比。** 无需安装官方客户端。
+
+### 安全性与合规性
+
+- ✅ **不修改官方程序的任何文件**：本工具是**独立程序**，只是向接收器发送状态查询，
+  既不注入官方客户端、也不改动它的任何配置或文件
+- ✅ **对手柄无损坏风险**：**只读**状态（发送的查询命令就是官方客户端自己使用的那一条），
+  不写配置、不刷固件、不改灯效；即使卸载也不会在手柄上留下任何东西
+- ✅ **无被认定为外挂的风险**：不修改游戏进程、不读写游戏内存、不注入任何游戏，
+  它只是一个"读取外设电量并显示在通知区域"的系统小工具，与游戏本身毫无交互
 
 ```
 🔋 电量     : 100%
@@ -301,7 +316,7 @@ Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\CI\Policy' |
 | 情况 | 建议 |
 |---|---|
 | 自己用 | **用源码运行**（`python run.py tray`）—— Python 解释器有签名，不受影响 |
-| 想分发 exe | 需要**代码签名**；开源项目可申请 [SignPath Foundation](https://signpath.org/) 的免费签名 |
+| 想分发 exe | 需要**代码签名**（个人开发者可购买 OV 代码签名证书）|
 | 用户被拦截 | 让其改用 `pip install` 或源码运行；**不要**建议关闭 SAC（关闭不可逆，需重装系统才能恢复） |
 
 > GitHub Release 的附件会被打上"来自互联网"标记，SAC 开启的用户同样会被拦截。
@@ -358,30 +373,6 @@ Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\CI\Policy' |
 - [适配新型号教程](docs/adapt-new-device.md)
 - [协议规格](docs/protocol.md)
 - Issue / PR 中英文都欢迎
-
-## 代码签名政策
-
-> **当前状态：材料已备好，尚未提交申请。**
-> 本项目的 Release 里的 exe **目前是未签名的**（会被 Windows 智能应用控制拦截）。
-> 按 [SignPath Foundation 的要求](https://signpath.org/terms.html)，
-> 申请免费开源签名需要项目主页先有这份政策，因此这里预先写明；
-> 计划在积累一定用户量后再提交申请（他们要求项目有可验证的声誉）。
-
-**Free code signing provided by [SignPath.io](https://about.signpath.io),
-certificate by [SignPath Foundation](https://signpath.org).**
-
-| 角色 | 成员 |
-|---|---|
-| Committers and reviewers | [@oitsukiii](https://github.com/oitsukiii) |
-| Approvers | [@oitsukiii](https://github.com/oitsukiii) |
-
-**隐私政策**：This program will not transfer any information to other networked
-systems unless specifically requested by the user or the person installing or
-operating it.（本程序不会向任何联网系统传输信息，除非用户明确要求。）
-
-只有由本仓库源码、经 [GitHub Actions](.github/workflows/build.yml) 构建出来的
-`betop-battery.exe` / `betop-battery-cli.exe` 会被签名。完整说明见
-[CODE_SIGNING_POLICY.md](CODE_SIGNING_POLICY.md)。
 
 ## 许可
 
