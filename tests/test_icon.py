@@ -142,3 +142,57 @@ def test_emoji_and_text_use_separate_fonts():
     assert overlay.EMOJI_FONT_FAMILY != overlay.TEXT_FONT_FAMILY
     assert "YaHei" in overlay.TEXT_FONT_FAMILY, "中文默认用微软雅黑"
     assert "Emoji" in overlay.EMOJI_FONT_FAMILY
+
+
+# ---------------------------------------------------------------------------
+# 图形几何：小尺寸可读性（真机反馈"太小看不清"）
+# ---------------------------------------------------------------------------
+
+def _span_ratio(img) -> tuple:
+    """返回图形外接框占画布的比例 (宽, 高)。
+
+    为什么用外接框而不是"墨迹覆盖率"：描边类图形（电池）本来就不该被填满，
+    覆盖率低并不代表画得小；而外接框直接反映"图形铺开了多少画布"。
+    """
+    alpha = img.split()[-1]
+    bbox = alpha.getbbox()
+    if bbox is None:
+        return (0.0, 0.0)
+    size = img.size[0]
+    return ((bbox[2] - bbox[0]) / size, (bbox[3] - bbox[1]) / size)
+
+
+def test_shapes_fill_most_of_the_canvas():
+    """三种样式都必须**铺满画布**，否则缩到 16px 就糊成一团。
+
+    真机反馈：圆环/电池样式在通知区域里"太小看不清"。
+    这里用外接框占比做客观约束，防止以后又把图形画小。
+    """
+    status = BatteryStatus(battery_percent=93, charging=False)
+    for style in ("number", "ring", "battery"):
+        img = render_icon(status, IconStyle(style=style), 64)
+        w, h = _span_ratio(img)
+        assert max(w, h) >= 0.90, f"{style} 只铺开 {w:.2f}x{h:.2f}，图形太小"
+
+
+def test_ring_number_is_not_swallowed_by_the_ring():
+    """圆环内的数字必须与环形成对比（不能绿字压绿环）。
+
+    做法是环内铺一层浅色内盘；这里检查圆环中心区域存在接近白色的像素。
+    """
+    status = BatteryStatus(battery_percent=93, charging=False)
+    img = render_icon(status, IconStyle(style="ring"), 64).convert("RGB")
+    center = img.crop((22, 22, 42, 42))
+    light = sum(1 for p in center.getdata() if min(p) > 180)
+    assert light > 50, "圆环中心缺少浅色内盘，数字会看不清"
+
+
+def test_battery_number_has_contrast_at_high_level():
+    """电量高时电池内部填满，数字需要有描边才能看清。"""
+    status = BatteryStatus(battery_percent=93, charging=False)
+    img = render_icon(status, IconStyle(style="battery"), 64).convert("RGB")
+    # 中心区域应同时存在白色（数字/描边）与非白（填充）像素
+    region = list(img.crop((20, 24, 48, 44)).getdata())
+    white = sum(1 for p in region if min(p) > 200)
+    colored = sum(1 for p in region if p[1] > p[0] + 30)
+    assert white > 10 and colored > 10, "电池内的数字对比度不足"

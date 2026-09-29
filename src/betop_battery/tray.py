@@ -97,7 +97,9 @@ class TrayApp:
 
             if time.time() - self._last_read >= max(5, int(self._settings.poll_seconds)):
                 self.refresh()
-            self._stop.wait(2)
+            # 轻量检查间隔：读一个文件的 mtime + 一个小 JSON，开销可忽略。
+            # 原来是 2 秒，导致在设置界面换图标样式后要等 1~2 秒才生效（用户反馈卡顿）。
+            self._stop.wait(0.35)
 
     def _sync_from_shared(self) -> None:
         """采用共享缓存中比当前更新的读数（保持界面间一致）。"""

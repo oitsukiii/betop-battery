@@ -137,8 +137,12 @@ class OverlayWindow:
         for widget in (self._lbl_icon1, self._lbl_name, self._lbl_icon2, self._lbl_value):
             widget.pack(side="left")
 
-        # 拖动与右键菜单都绑在文字层上（背景层不接收鼠标事件）
-        for widget in (row, self._lbl_icon1, self._lbl_name, self._lbl_icon2, self._lbl_value):
+        # 拖动与右键菜单要绑到**两层所有可见部位**上。
+        # 原来只绑了文字标签，导致必须精确瞄准文字才能拖动（用户反馈很难瞄准）；
+        # 现在点到背景面板的任意位置都能拖。
+        targets = [self._bg, row,
+                   self._lbl_icon1, self._lbl_name, self._lbl_icon2, self._lbl_value]
+        for widget in targets:
             widget.bind("<Button-1>", self._on_press)
             widget.bind("<B1-Motion>", self._on_drag)
             widget.bind("<ButtonRelease-1>", self._on_release)

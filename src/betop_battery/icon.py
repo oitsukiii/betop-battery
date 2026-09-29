@@ -119,6 +119,31 @@ def _draw_centered(draw, text: str, font, box, fill) -> None:
         draw.text((box[0] + 4, box[1] + 4), text, fill=fill)
 
 
+def _draw_centered_stroked(draw, text: str, font, box, fill, stroke=None,
+                           stroke_width: int = 2) -> None:
+    """居中绘制文字，可选**描边**。
+
+    为什么需要：16px 的通知区域里，纯色文字的笔画只有 1~2 像素，
+    叠在同色系背景上几乎看不清。加一圈细描边能显著提升辨识度。
+    """
+    if font is None:
+        return
+    try:
+        b = draw.textbbox((0, 0), text, font=font)
+        w, h = b[2] - b[0], b[3] - b[1]
+        x = box[0] + (box[2] - box[0] - w) / 2 - b[0]
+        y = box[1] + (box[3] - box[1] - h) / 2 - b[1]
+    except Exception:
+        x, y = box[0] + 4, box[1] + 4
+
+    if stroke is not None and stroke_width > 0:
+        for dx in range(-stroke_width, stroke_width + 1):
+            for dy in range(-stroke_width, stroke_width + 1):
+                if dx or dy:
+                    draw.text((x + dx, y + dy), text, font=font, fill=stroke)
+    draw.text((x, y), text, font=font, fill=fill)
+
+
 def _label(status: BatteryStatus) -> str:
     """图标上显示的文字。"""
     return "--" if status.battery_percent is None else str(status.battery_percent)
@@ -136,44 +161,74 @@ def _render_number(draw, status, color: RGB, size: int) -> None:
 
 
 def _render_ring(draw, status, color: RGB, size: int) -> None:
-    """环形进度 + 中间数字。"""
-    pad = int(size * 0.08)
-    width = max(3, int(size * 0.12))
-    box = [pad, pad, size - pad, size - pad]
-    # 底环
-    draw.ellipse(box, outline=(210, 210, 215, 255), width=width)
+    """环形进度 + 中间数字。
+
+    在 16px 的通知区域里，**细环和小数字都会糊成一团**（实测）：
+    因此环尽量贴边并加粗，数字也尽量放大，让"形状"和"数值"都还认得出来。
+    """
+    width = max(3, int(size * 0.20))          # 环的粗细：约为画布的 1/5
+    inset = max(1, int(size * 0.02))          # 环的**外沿**只留一点点边距
+    # 注意：Pillow 的 ellipse(outline, width) 是**向内**画的，
+    # 所以外接框就是 box 本身 —— 之前把 inset 又加了 width//2，
+    # 导致环只占画布 78%（实测），在 16px 下更糊。
+    box = [inset, inset, size - 1 - inset, size - 1 - inset]
+    # 底环（浅色轨道，表示"总量"）
+    draw.ellipse(box, outline=(206, 208, 216, 255), width=width)
     percent = status.battery_percent
     if percent is not None and not status.charging:
-        # Pillow 的 arc 用角度制，0° 在 3 点方向，顺时针
+        # Pillow 的 arc 用角度制，0° 在 3 点方向，顺时针；这里从 12 点开始
         end = -90 + int(360 * max(0, min(100, percent)) / 100)
-        draw.arc(box, start=-90, end=end, fill=color, width=width)
+        if end > -90:
+            draw.arc(box, start=-90, end=end, fill=color, width=width)
     else:
         draw.ellipse(box, outline=color, width=width)
-    font = _load_font(int(size * 0.42))
+    # 环内铺一层浅色内盘：否则放大后的数字会压在环上（绿字压绿环 = 看不见）
+    # 内盘半径 = 环外半径 − 环宽（留 1px 余量），精确贴合环的内沿
+    center = size / 2.0
+    r_outer = (size - 1 - 2 * inset) / 2.0
+    r_plate = max(2.0, r_outer - width + 1)
+    draw.ellipse([center - r_plate, center - r_plate,
+                  center + r_plate, center + r_plate], fill=(248, 249, 252, 255))
+    # 数字放大到画布的 ~56%，尽量占满内盘
+    font = _load_font(int(size * 0.56))
     _draw_centered(draw, _label(status), font, (0, 0, size, size), color)
 
 
 def _render_battery(draw, status, color: RGB, size: int) -> None:
-    """电池外形 + 内部填充 + 数字。"""
-    left, top = int(size * 0.10), int(size * 0.24)
-    right, bottom = int(size * 0.88), int(size * 0.76)
-    cap_w, cap_h = int(size * 0.06), int(size * 0.16)
+    """电池外形 + 内部填充 + 数字。
+
+    同样为了小尺寸可读性：电池**占满画布**、轮廓加粗、数字放大到约 40%。
+    """
+    outline_w = max(3, int(size * 0.10))
+    left, top = int(size * 0.02), int(size * 0.13)
+    right, bottom = int(size * 0.86), int(size * 0.87)
+    cap_w, cap_h = int(size * 0.09), int(size * 0.30)
     # 外壳
-    draw.rounded_rectangle([left, top, right, bottom], radius=int(size * 0.08),
-                           outline=color, width=max(2, int(size * 0.06)))
+    draw.rounded_rectangle([left, top, right, bottom], radius=int(size * 0.11),
+                           outline=color, width=outline_w)
     # 正极帽
-    draw.rectangle([right + 1, (top + bottom) // 2 - cap_h // 2,
-                    right + cap_w, (top + bottom) // 2 + cap_h // 2], fill=color)
-    percent = status.battery_percent or 0
-    if status.battery_percent is not None:
-        inner_l = left + 5
-        inner_r = left + 5 + int((right - left - 10) * max(0, min(100, percent)) / 100)
+    draw.rounded_rectangle([right + 2, (top + bottom) // 2 - cap_h // 2,
+                            right + 2 + cap_w, (top + bottom) // 2 + cap_h // 2],
+                           radius=max(1, int(size * 0.02)), fill=color)
+    percent = status.battery_percent
+    if percent is not None:
+        inner_l = left + outline_w + 2
+        inner_r = left + outline_w + 2 + int(
+            (right - left - 2 * outline_w - 4) * max(0, min(100, percent)) / 100)
         if inner_r > inner_l:
-            draw.rounded_rectangle([inner_l, top + 5, inner_r, bottom - 5],
-                                   radius=int(size * 0.04), fill=color)
-    font = _load_font(int(size * 0.26))
-    _draw_centered(draw, _label(status), font, (left, top, right, bottom),
-                   (255, 255, 255, 255) if (status.battery_percent or 0) > 55 else (40, 40, 40, 255))
+            draw.rounded_rectangle([inner_l, top + outline_w + 2, inner_r, bottom - outline_w - 2],
+                                   radius=int(size * 0.05), fill=color)
+    # 数字：填充过半时用白色（描绿色边），否则用深色（描白边），保证任何电量下都清晰
+    filled = (percent or 0) >= 50
+    font = _load_font(int(size * 0.42))
+    if filled:
+        _draw_centered_stroked(draw, _label(status), font, (left, top, right, bottom),
+                               fill=(255, 255, 255, 255), stroke=color,
+                               stroke_width=max(1, int(size * 0.02)))
+    else:
+        _draw_centered_stroked(draw, _label(status), font, (left, top, right, bottom),
+                               fill=(45, 45, 55, 255), stroke=(255, 255, 255, 255),
+                               stroke_width=max(1, int(size * 0.02)))
 
 
 _RENDERERS = {
