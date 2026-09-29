@@ -22,7 +22,8 @@ from . import i18n
 from .config import Settings, config_path
 from .icon import ICON_SIZE, render_icon
 from .log import make_logger
-from .proc import focus_window, spawn
+from .proc import (acquire_single_instance, focus_window,
+                   release_single_instance, spawn)
 from .reader import BatteryReader, BatteryStatus
 from .state import load_status
 
@@ -64,7 +65,13 @@ class TrayApp:
     # -- 对外 -------------------------------------------------------------
 
     def run(self) -> int:
-        """启动托盘（阻塞直到用户退出）。"""
+        """启动托盘（阻塞直到用户退出）。
+
+        会先抢一个单实例锁：重复点桌面快捷方式时不再叠加第二个托盘图标。
+        """
+        if not acquire_single_instance("tray"):
+            self._log("托盘已经在运行了，本次启动跳过（无需重复打开）")
+            return 0
         pystray = _require_pystray()
         self._icon = pystray.Icon(
             "betop-battery",
@@ -74,7 +81,10 @@ class TrayApp:
         )
         threading.Thread(target=self._poll_loop, daemon=True).start()
         self._log(i18n.t("tray_started"))
-        self._icon.run()
+        try:
+            self._icon.run()
+        finally:
+            release_single_instance("tray")
         return 0
 
     # -- 轮询 -------------------------------------------------------------

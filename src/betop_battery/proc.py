@@ -87,3 +87,87 @@ def focus_window(title: str) -> bool:
         return True
     except Exception:
         return False
+
+
+# --------------------------------------------------------------------------- 单实例
+
+
+def pid_alive(pid: int) -> bool:
+    """判断进程是否还活着（跨平台，**Windows 上安全**）。
+
+    注意：Windows 上 ``os.kill(pid, 0)`` 的行为与 POSIX 完全不同 ——
+    它会对目标进程调用 ``TerminateProcess``（直接杀掉！），所以绝不能用它探测存活。
+    这里改用 Win32 ``OpenProcess`` + ``GetExitCodeProcess``。
+    """
+    if pid <= 0:
+        return False
+    if os.name == "nt":
+        try:
+            import ctypes
+            from ctypes import wintypes
+
+            PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+            STILL_ACTIVE = 259
+            kernel32 = ctypes.windll.kernel32
+            handle = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+            if not handle:
+                return False
+            try:
+                code = wintypes.DWORD()
+                ok = kernel32.GetExitCodeProcess(handle, ctypes.byref(code))
+                return bool(ok) and code.value == STILL_ACTIVE
+            finally:
+                kernel32.CloseHandle(handle)
+        except Exception:
+            return False
+    try:
+        os.kill(pid, 0)
+        return True
+    except OSError:
+        return False
+
+
+def _lock_path(name: str) -> str:
+    """单实例锁文件的路径（放在配置目录，随用户走）。"""
+    from .config import config_dir
+
+    return os.path.join(config_dir(), f"{name}.pid")
+
+
+def acquire_single_instance(name: str) -> bool:
+    """尝试取得某个组件的单实例锁。
+
+    用途：点两次桌面快捷方式时，不要再叠加一个托盘图标 / 一层 HUD。
+
+    Args:
+        name: 组件名，例如 ``"tray"`` / ``"hud"``
+
+    Returns:
+        True 表示拿到了锁（可以继续启动）；False 表示已经有一个在跑。
+    """
+    path = _lock_path(name)
+    try:
+        if os.path.isfile(path):
+            with open(path, encoding="utf-8") as fp:
+                old = int((fp.read() or "0").strip() or 0)
+            if old and old != os.getpid() and pid_alive(old):
+                return False
+        with open(path, "w", encoding="utf-8") as fp:
+            fp.write(str(os.getpid()))
+        return True
+    except Exception:
+        # 锁文件出问题不应阻止程序启动
+        return True
+
+
+def release_single_instance(name: str) -> None:
+    """释放单实例锁（退出时调用，失败静默）。"""
+    path = _lock_path(name)
+    try:
+        if os.path.isfile(path):
+            with open(path, encoding="utf-8") as fp:
+                owner = int((fp.read() or "0").strip() or 0)
+            if owner == os.getpid():
+                os.remove(path)
+    except Exception:
+        pass

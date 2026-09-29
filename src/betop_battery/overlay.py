@@ -35,6 +35,7 @@ from typing import Optional
 from . import i18n
 from .config import Settings, config_path
 from .log import make_logger
+from .proc import (acquire_single_instance, release_single_instance, spawn)
 from .reader import BatteryReader, BatteryStatus
 from .state import load_status
 
@@ -352,8 +353,6 @@ class OverlayWindow:
 
     def _open_settings(self) -> None:
         """拉起设置界面（独立进程）。"""
-        from .proc import spawn
-
         spawn("gui")
 
     def _quit(self) -> None:
@@ -478,7 +477,13 @@ class OverlayWindow:
     # ---------------------------------------------------------------- 对外
 
     def run(self) -> int:
-        """启动 HUD（阻塞）。"""
+        """启动 HUD（阻塞）。
+
+        同样加单实例锁：否则重复启动会叠出好几层 HUD。
+        """
+        if not acquire_single_instance("hud"):
+            self._log("HUD 已经在运行了，本次启动跳过")
+            return 0
         self._log(i18n.t("hud_started"))
         threading.Thread(target=self._poll_loop, daemon=True).start()
         self._root.after(200, self._tick)
@@ -486,6 +491,8 @@ class OverlayWindow:
             self._root.mainloop()
         except KeyboardInterrupt:
             pass
+        finally:
+            release_single_instance("hud")
         return 0
 
 

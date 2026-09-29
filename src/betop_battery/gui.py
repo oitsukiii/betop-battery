@@ -30,7 +30,7 @@ from . import i18n
 from .config import Settings, config_path
 from .icon import COLOR_SCHEMES, ICON_SIZE, IconStyle, render_icon
 from .log import make_logger
-from .proc import spawn
+from .proc import acquire_single_instance, release_single_instance, spawn
 from .reader import BatteryReader, BatteryStatus
 from .state import load_status
 
@@ -656,7 +656,14 @@ class SettingsWindow:
     # ------------------------------------------------------------------ 运行
 
     def run(self) -> int:
-        """显示窗口（阻塞直到关闭）。"""
+        """显示窗口（阻塞直到关闭）。
+
+        托盘已经会用 focus_window 把已有窗口拉到前台，这里再加一道锁兜底
+        （例如直接从命令行重复启动时）。
+        """
+        if not acquire_single_instance("gui"):
+            self._log("设置窗口已经在运行了，本次启动跳过")
+            return 0
         self._refresh_now()
         threading.Thread(target=self._poll_loop, daemon=True).start()
         self._root.after(300, self._tick)
@@ -666,6 +673,7 @@ class SettingsWindow:
             pass
         finally:
             self._stop_event.set()
+            release_single_instance("gui")
         return 0
 
 
