@@ -62,7 +62,7 @@ Download `betop-battery.exe` from [Releases](../../releases) and double-click it
 ### From source
 
 ```bash
-git clone https://github.com/REPLACE-ME/betop-battery.git
+git clone https://github.com/oitsukiii/betop-battery.git
 cd betop-battery
 pip install -r requirements.txt
 

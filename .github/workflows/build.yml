@@ -1,0 +1,62 @@
+# 持续集成：跑测试 + 构建 Windows 可执行文件
+#
+# 之所以把构建放在 CI 里：一是给用户提供可复现的产物，
+# 二是代码签名（SignPath Foundation）要求二进制必须能从仓库源码**可验证地**构建出来。
+name: build
+
+on:
+  push:
+    branches: [main, master]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: 单元测试（无需手柄）
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.9", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: 安装依赖
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest Pillow
+      - name: 运行测试
+        run: pytest -q
+
+  windows-exe:
+    name: 构建 Windows exe
+    runs-on: windows-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: 安装依赖
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pyinstaller
+      - name: 构建
+        run: python tools/build_exe.py
+      - name: 计算校验和
+        shell: pwsh
+        run: |
+          Get-ChildItem dist\*.exe | ForEach-Object {
+            $h = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower()
+            "$h  $($_.Name)" | Out-File -Append dist\SHA256SUMS.txt -Encoding ascii
+          }
+          Get-Content dist\SHA256SUMS.txt
+      - name: 上传产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-exe
+          path: |
+            dist/*.exe
+            dist/SHA256SUMS.txt

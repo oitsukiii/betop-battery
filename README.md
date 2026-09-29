@@ -58,7 +58,7 @@
 ### 方式二：从源码运行
 
 ```bash
-git clone https://github.com/REPLACE-ME/betop-battery.git
+git clone https://github.com/oitsukiii/betop-battery.git
 cd betop-battery
 pip install -r requirements.txt
 
@@ -275,6 +275,24 @@ Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\CI\Policy' |
 - [适配新型号教程](docs/adapt-new-device.md)
 - [协议规格](docs/protocol.md)
 - Issue / PR 中英文都欢迎
+
+## 代码签名政策（Code signing policy）
+
+**Free code signing provided by [SignPath.io](https://about.signpath.io),
+certificate by [SignPath Foundation](https://signpath.org).**
+
+| 角色 | 成员 |
+|---|---|
+| Committers and reviewers | [@oitsukiii](https://github.com/oitsukiii) |
+| Approvers | [@oitsukiii](https://github.com/oitsukiii) |
+
+**隐私政策**：This program will not transfer any information to other networked
+systems unless specifically requested by the user or the person installing or
+operating it.（本程序不会向任何联网系统传输信息，除非用户明确要求。）
+
+只有由本仓库源码、经 [GitHub Actions](.github/workflows/build.yml) 构建出来的
+`betop-battery.exe` / `betop-battery-cli.exe` 会被签名。完整说明见
+[CODE_SIGNING_POLICY.md](CODE_SIGNING_POLICY.md)。
 
 ## 许可
 

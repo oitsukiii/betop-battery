@@ -263,7 +263,7 @@ class TrayApp:
                     checked=lambda item, p=pct: self._settings.low_battery_threshold == p,
                     radio=True,
                 )
-                for pct in (10, 20, 30, 40)
+                for pct in (10, 20, 30, 40, 50)
             ]
         )
         return pystray.Menu(

@@ -44,6 +44,9 @@ STYLE_LABELS = {
 #: 刷新间隔预设（秒）—— 用下拉而不是自由输入，避免填出无意义的数值
 INTERVAL_PRESETS = (15, 30, 60, 120, 300, 600)
 
+#: 低电量提醒阈值预设（%）
+THRESHOLD_PRESETS = (10, 20, 30, 40, 50)
+
 class ScrollableFrame(ttk.Frame):
     """带垂直滚动条的容器：窗口变小时内容不会被裁掉。"""
 
@@ -106,6 +109,7 @@ class SettingsWindow:
         self._queue: "queue.Queue[BatteryStatus]" = queue.Queue()
         self._stop_event = threading.Event()
         self._hud_proc = None           # 由本界面启动的 HUD 进程（用于关闭时结束它）
+        self._tray_proc = None          # 由本界面启动的托盘进程
         self._preview_image = None      # 必须持有引用，否则会被 GC 掉
         self._apply_job = None
         self._last_read_ts = 0.0        # 自己上次发起 HID 读取的时间
@@ -204,12 +208,19 @@ class SettingsWindow:
         interval.grid(row=0, column=1, sticky="w", padx=8, pady=(14, 2))
         self._interval_box = interval
 
-        ttk.Label(parent, text="低电量提醒阈值（%）").grid(row=1, column=0, sticky="w",
-                                                          padx=16, pady=6)
-        self._vars["low_battery_threshold"] = tk.IntVar(value=self._settings.low_battery_threshold)
-        ttk.Spinbox(parent, from_=1, to=100, width=10,
-                    textvariable=self._vars["low_battery_threshold"]).grid(row=1, column=1,
-                                                                           sticky="w", padx=8)
+        ttk.Label(parent, text="低电量提醒阈值").grid(row=1, column=0, sticky="w",
+                                                      padx=16, pady=6)
+        # 预设之外的历史值也要出现在下拉里（早期版本是自由输入）
+        thresholds = list(THRESHOLD_PRESETS)
+        if self._settings.low_battery_threshold not in thresholds:
+            thresholds.append(self._settings.low_battery_threshold)
+            thresholds.sort()
+        threshold_box = ttk.Combobox(parent, state="readonly", width=10,
+                                     values=[f"{pct}%" for pct in thresholds])
+        threshold_box.set(f"{self._settings.low_battery_threshold}%")
+        threshold_box.grid(row=1, column=1, sticky="w", padx=8)
+        threshold_box.bind("<<ComboboxSelected>>", lambda _e: self._schedule_apply())
+        self._threshold_box = threshold_box
 
         self._vars["notify_on_low"] = tk.BooleanVar(value=self._settings.notify_on_low)
         ttk.Checkbutton(parent, text="低于阈值时弹出系统通知",
@@ -238,10 +249,11 @@ class SettingsWindow:
     def _build_icon(self, parent) -> None:
         """托盘图标外观：启用开关、样式、配色、充电标记，带实时预览。"""
         self._vars["tray_enabled"] = tk.BooleanVar(value=self._settings.tray_enabled)
-        ttk.Checkbutton(parent, text="启用托盘图标",
-                        variable=self._vars["tray_enabled"]).grid(row=0, column=0, columnspan=2,
-                                                                  sticky="w", padx=16, pady=(14, 2))
-        ttk.Label(parent, text="（取消勾选并应用后，托盘图标会消失；重新启用请再运行一次程序）",
+        ttk.Checkbutton(parent, text="启用托盘图标（通知区域显示电量）",
+                        variable=self._vars["tray_enabled"],
+                        command=self._on_tray_toggle).grid(row=0, column=0, columnspan=2,
+                                                           sticky="w", padx=16, pady=(14, 2))
+        ttk.Label(parent, text="（勾选立即出现，取消立即消失）",
                   foreground="#888", font=("Microsoft YaHei UI", 8)).grid(
             row=1, column=0, columnspan=2, sticky="w", padx=32, pady=(0, 10))
 
@@ -435,8 +447,15 @@ class SettingsWindow:
             style=get("icon_style", "number"),
             scheme=get("icon_scheme", "auto"),
             show_charging_marker=get("icon_show_charging_marker", True),
-            low_threshold=int(get("low_battery_threshold", 20) or 20),
+            low_threshold=self._current_threshold(),
         )
+
+    def _current_threshold(self) -> int:
+        """从下拉框解析低电量阈值（%）。"""
+        try:
+            return max(1, int(str(self._threshold_box.get()).rstrip("%")))
+        except Exception:
+            return 20
 
     def _current_interval(self) -> int:
         """从下拉框解析刷新间隔（秒）。"""
@@ -457,14 +476,40 @@ class SettingsWindow:
             self._schedule_apply()
 
     def _reset_hud_position(self) -> None:
-        """把 HUD 位置设为自动（右下角）。
+        """请求 HUD 复位到右下角。
 
-        注意：这里写 -1，HUD 端会把 -1 视为"复位到右下角"并立即生效。
+        通过**令牌 +1** 发出一次性信号：HUD 只在令牌变化时才移动位置，
+        这样锁定布局、改字号等操作不会让它乱跳（用户反馈的问题）。
         """
-        self._settings.overlay_x = -1
-        self._settings.overlay_y = -1
-        self._apply_now()
+        fresh = Settings.load()
+        self._collect_settings_into(fresh)      # 带上界面上的其它改动
+        fresh.overlay_x = -1
+        fresh.overlay_y = -1
+        fresh.overlay_reset_token += 1
+        fresh.save()
+        self._settings = fresh
         self._flash_hint("已请求 HUD 复位到右下角")
+
+    def _on_tray_toggle(self) -> None:
+        """勾选/取消「启用托盘图标」。
+
+        与 HUD 的开关保持**完全一致的逻辑**：
+          勾选 → 立即启动；取消 → 立即结束（同时配置文件也会写 false，
+          让托盘自己发现后退出，两条路都走，保证一定生效）。
+        """
+        enabled = bool(self._vars["tray_enabled"].get())
+        self._apply_now()
+        if enabled:
+            self._tray_proc = spawn("tray")
+            self._flash_hint("已启动托盘图标")
+        else:
+            if self._tray_proc is not None:
+                try:
+                    self._tray_proc.terminate()
+                except Exception:
+                    pass
+                self._tray_proc = None
+            self._flash_hint("已关闭托盘图标")
 
     def _on_hud_toggle(self) -> None:
         """勾选/取消"启用 HUD"。
@@ -498,11 +543,18 @@ class SettingsWindow:
         self._apply_job = self._root.after(400, self._apply_now)
 
     def _apply_now(self) -> None:
-        """把界面设置写入 config.json（托盘/HUD 会自动热更新）。"""
+        """把界面设置写入 config.json（托盘/HUD 会自动热更新）。
+
+        **以磁盘上的最新配置为基准**再覆盖界面管理的字段：
+        HUD 拖动后会把自己的坐标写进配置，如果这里拿着界面打开时的旧快照整份覆盖，
+        就会把 HUD 的位置改回去（表现为"拖完又跳回来"）。
+        """
         self._apply_job = None
         try:
-            self._collect_settings()
-            self._settings.save()
+            fresh = Settings.load()
+            self._collect_settings_into(fresh)   # 不包含 X/Y 与复位令牌
+            fresh.save()
+            self._settings = fresh
             self._flash_hint("已应用 ✓")
         except Exception as exc:
             self._flash_hint(f"应用失败：{exc}", error=True)
@@ -512,17 +564,23 @@ class SettingsWindow:
         self._footer_hint.configure(text=text, foreground="#c62828" if error else "#1e7d22")
         self._root.after(2500, lambda: self._footer_hint.configure(text=""))
 
-    def _collect_settings(self) -> None:
-        """把界面控件的值收集进 Settings 对象。"""
+    def _collect_settings_into(self, s: Settings) -> None:
+        """把界面控件的值收集进给定的 Settings 对象。
+
+        Args:
+            s: 目标对象（通常是刚从磁盘读到的最新配置）
+
+        注意：**不覆盖** ``overlay_x`` / ``overlay_y`` / ``overlay_reset_token``
+        —— 位置由 HUD 自身拖动或「复位」按钮决定。
+        """
         def get(key, default=None):
             try:
                 return self._vars[key].get()
             except Exception:
                 return default
 
-        s = self._settings
         s.poll_seconds = self._current_interval()
-        s.low_battery_threshold = int(get("low_battery_threshold", 20) or 20)
+        s.low_battery_threshold = self._current_threshold()
         s.notify_on_low = bool(get("notify_on_low", True))
         s.device_id = str(get("device_id", "") or "").strip()
 
@@ -537,7 +595,7 @@ class SettingsWindow:
         s.overlay_show_device = bool(get("overlay_show_device", True))
         s.overlay_show_battery = bool(get("overlay_show_battery", True))
         s.overlay_click_through = bool(get("overlay_click_through", False))
-        # 位置只由"复位按钮"或 HUD 自身拖动决定，这里不覆盖 X/Y
+        # 位置（overlay_x/y）与复位令牌刻意不覆盖
 
     def _on_close(self) -> None:
         """关闭前把当前界面上的设置保存下来。"""

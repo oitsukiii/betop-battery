@@ -98,3 +98,43 @@ def test_placeholder_status_must_have_zero_timestamp():
     for module in (gui, overlay, tray):
         source = inspect.getsource(module)
         assert 'timestamp=0.0' in source, f"{module.__name__} 的占位状态缺少 timestamp=0.0"
+
+
+def test_hud_position_only_changes_on_explicit_reset():
+    """HUD 位置只应在「首次启动」或「显式复位」时改变。
+
+    真机反馈：锁定布局时 HUD 会跳回初始位置 —— 根因是每次应用设置都把
+    ``overlay_x == -1`` 当作复位信号，而用户可能从未拖动过（x/y 本来就是 -1）。
+    现在改用 overlay_reset_token 作为一次性显式信号。
+    """
+    import inspect
+
+    from betop_battery import gui, overlay
+    from betop_battery.config import Settings
+
+    # 配置里必须有复位令牌
+    assert "overlay_reset_token" in Settings.__dataclass_fields__
+
+    # HUD 端：仅在 initial 或 reset_position 时移动
+    src = inspect.getsource(overlay.OverlayWindow._apply_settings)
+    assert "reset_position" in src and "if initial:" in src
+
+    # 界面端：复位按钮必须递增令牌
+    gui_src = inspect.getsource(gui.SettingsWindow._reset_hud_position)
+    assert "overlay_reset_token += 1" in gui_src, "复位按钮必须递增令牌"
+
+
+def test_apply_does_not_clobber_hud_position():
+    """界面「应用」不能覆盖 HUD 自己保存的位置（否则拖动后会跳回）。"""
+    import inspect
+
+    from betop_battery import gui
+
+    src = inspect.getsource(gui.SettingsWindow._apply_now)
+    assert "Settings.load()" in src, "应用前应先读取磁盘上的最新配置"
+    collect = inspect.getsource(gui.SettingsWindow._collect_settings_into)
+    # 用正则找真正的赋值语句（注释里提到字段名不算）
+    import re
+
+    assert not re.search(r"\bs\.overlay_(x|y|reset_token)\s*=", collect), \
+        "收集界面设置时不应给 overlay_x / overlay_y / overlay_reset_token 赋值"

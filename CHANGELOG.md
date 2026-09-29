@@ -81,4 +81,4 @@
 
 由 DeepSeek V4.1 Flash 驱动 DeepSeek Harness (DSH) 以 vibe coding 方式开发。
 
-[1.0.0]: https://github.com/REPLACE-ME/betop-battery/releases/tag/v1.0.0
+[1.0.0]: https://github.com/oitsukiii/betop-battery/releases/tag/v1.0.0

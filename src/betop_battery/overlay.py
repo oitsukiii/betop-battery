@@ -146,7 +146,7 @@ class OverlayWindow:
 
     # ------------------------------------------------------------------ 应用设置
 
-    def _apply_settings(self, initial: bool = False) -> None:
+    def _apply_settings(self, initial: bool = False, reset_position: bool = False) -> None:
         """应用外观设置（颜色、字号、透明度、锁定、位置）。"""
         s = self._settings
         size = s.overlay_font_size
@@ -172,13 +172,16 @@ class OverlayWindow:
 
         self._set_locked(s.overlay_click_through)
 
-        if s.overlay_x < 0 or s.overlay_y < 0:
-            self._move_to_default_corner()
-        else:
-            self._move_both(s.overlay_x, s.overlay_y)
-
+        # 位置处理：**只在首次启动或用户显式点「复位」时**才移动窗口。
+        # 否则锁定布局/改字号等操作会让 HUD 跳回右下角（用户实测反馈的问题）。
         if initial:
+            if s.overlay_x < 0 or s.overlay_y < 0:
+                self._move_to_default_corner()
+            else:
+                self._move_both(s.overlay_x, s.overlay_y)
             self._fg.lift()
+        elif reset_position:
+            self._move_to_default_corner()
 
     def _sync_geometry(self) -> None:
         """让背景层的尺寸与文字层一致（文字层决定实际大小）。
@@ -328,10 +331,16 @@ class OverlayWindow:
         self._sync_geometry()
 
     def _reset_position(self) -> None:
-        """位置复位到右下角（并把设置也改成"自动"）。"""
+        """位置复位到右下角。"""
+        fresh = Settings.load()
+        fresh.overlay_x = -1
+        fresh.overlay_y = -1
+        try:
+            fresh.save()
+        except Exception:
+            pass
         self._settings.overlay_x = -1
         self._settings.overlay_y = -1
-        self._settings.save()
         self._move_to_default_corner()
 
     def _open_settings(self) -> None:
@@ -415,14 +424,20 @@ class OverlayWindow:
         if first:
             return False
 
-        self._settings = Settings.load()
+        new_settings = Settings.load()
         # 设置里关掉了 HUD → 自行退出（这修好了"取消勾选不生效"的问题）
-        if not self._settings.overlay_enabled:
+        if not new_settings.overlay_enabled:
+            self._settings = new_settings
             self._log("设置里已关闭 HUD，正在退出")
             self._quit()
             return True
-        self._apply_settings()
-        self._log("检测到设置变更，HUD 已热更新")
+
+        reset_requested = (new_settings.overlay_reset_token
+                           != self._settings.overlay_reset_token)
+        self._settings = new_settings
+        self._apply_settings(reset_position=reset_requested)
+        self._log("检测到设置变更，HUD 已热更新"
+                  + ("（位置已复位）" if reset_requested else ""))
         return False
 
     def _render_text(self) -> None:
