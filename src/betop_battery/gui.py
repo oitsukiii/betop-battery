@@ -30,7 +30,8 @@ from . import i18n
 from .config import Settings, config_path
 from .icon import COLOR_SCHEMES, ICON_SIZE, IconStyle, render_icon
 from .log import make_logger
-from .proc import acquire_single_instance, release_single_instance, spawn
+from .proc import (acquire_single_instance, ensure_processes,
+                   release_single_instance, spawn)
 from .reader import BatteryReader, BatteryStatus
 from .state import load_status
 
@@ -527,6 +528,19 @@ class SettingsWindow:
         self._settings = fresh
         self._flash_hint(i18n.t("reset_requested"))
 
+    def _ensure_processes(self) -> None:
+        """按当前设置把托盘图标 / HUD 拉起来（逻辑在 proc.ensure_processes）。
+
+        这是「打开程序」的统一入口：桌面只有一个快捷方式，它打开本界面；
+        托盘与 HUD 是否需要启动，由**上次保存的设置**决定。
+
+        * 首次安装（还没有配置文件）→ 两个开关默认都是 True → **两个都出现**
+        * 之后 → 完全按上次的状态恢复（上次关掉 HUD 就只起托盘）
+        """
+        started = ensure_processes(self._settings)
+        for component in started:
+            self._log("按设置启动了 " + ("托盘图标" if component == "tray" else "HUD"))
+
     def _on_tray_toggle(self) -> None:
         """勾选/取消「启用托盘图标」。
 
@@ -664,6 +678,7 @@ class SettingsWindow:
         if not acquire_single_instance("gui"):
             self._log("设置窗口已经在运行了，本次启动跳过")
             return 0
+        self._ensure_processes()
         self._refresh_now()
         threading.Thread(target=self._poll_loop, daemon=True).start()
         self._root.after(300, self._tick)

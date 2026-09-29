@@ -106,6 +106,11 @@ It automatically installs Python if missing, installs the dependencies,
 creates Desktop / Start Menu shortcuts and an uninstall entry, then launches
 the app — **one double-click in total**.
 
+**Only one shortcut is created.** Double-clicking it opens the settings window,
+and the **tray icon and the HUD come up automatically with it** (both are on for
+a fresh install). Later launches **restore whatever you left switched on** — if
+you turned the HUD off last time, only the tray starts.
+
 **This path is not affected by Windows Smart App Control**, because it uses the
 signed Python already on the system instead of an unsigned executable.
 

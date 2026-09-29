@@ -171,3 +171,53 @@ def release_single_instance(name: str) -> None:
                 os.remove(path)
     except Exception:
         pass
+
+
+def is_running(name: str) -> bool:
+    """某个组件（tray/hud/gui）当前是否已经在跑。
+
+    依据单实例锁文件 + 进程存活判断。用于"按设置拉起"时避免白起一个进程
+    （即使起了也会被锁挡住，但那样会多写一行日志）。
+
+    Args:
+        name: 组件名，例如 ``"tray"``
+    """
+    try:
+        with open(_lock_path(name), encoding="utf-8") as fp:
+            owner = int((fp.read() or "0").strip() or 0)
+    except Exception:
+        return False
+    return bool(owner) and owner != os.getpid() and pid_alive(owner)
+
+
+#: 组件名 → 对应的设置字段（哪些组件该不该起来，由设置决定）
+COMPONENT_FLAGS = {"tray": "tray_enabled", "hud": "overlay_enabled"}
+
+#: 组件名 → 启动它的命令行子命令
+COMPONENT_COMMANDS = {"tray": "tray", "hud": "overlay"}
+
+
+def ensure_processes(settings, runner=spawn, checker=is_running) -> list:
+    """按设置把该跑的组件拉起来。
+
+    这是「打开程序」的统一入口：桌面只有一个快捷方式，它打开设置界面；
+    托盘 / HUD 由这里按**上次保存的设置**决定要不要启动。
+    首次安装（还没有配置文件）时两个开关默认都是 True，于是两个都出现。
+
+    Args:
+        settings: :class:`~betop_battery.config.Settings`
+        runner:   启动函数（测试时可注入）
+        checker:  存活判断函数（测试时可注入）
+
+    Returns:
+        实际启动了哪些组件，例如 ``["tray", "hud"]``。
+    """
+    started = []
+    for component, flag in COMPONENT_FLAGS.items():
+        if not getattr(settings, flag, False):
+            continue
+        if checker(component):
+            continue                     # 已经在跑，不重复启动
+        runner(COMPONENT_COMMANDS[component])
+        started.append(component)
+    return started

@@ -229,11 +229,21 @@ if (-not $SkipShortcuts) {
     $desktop = [Environment]::GetFolderPath("Desktop")
     $startMenu = Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs"
 
+    # 只建**一个**快捷方式，打开的是设置界面；界面会按上次保存的设置
+    # 自动把托盘图标 / HUD 拉起来（首次安装两个都会出现），所以不再需要
+    # 单独的"启动托盘"快捷方式。
     $targets = @(
-        @{ Path = (Join-Path $desktop   "$AppName.lnk");            Args = "tray"; Desc = "在通知区域显示北通手柄电量" },
-        @{ Path = (Join-Path $desktop   "$AppName-设置.lnk");       Args = "gui";  Desc = "打开 betop-battery 设置界面" },
-        @{ Path = (Join-Path $startMenu "$AppName.lnk");            Args = "tray"; Desc = "在通知区域显示北通手柄电量" }
+        @{ Path = (Join-Path $desktop   "$AppName.lnk"); Args = "gui"; Desc = "打开北通手柄电量（托盘与 HUD 会按上次设置自动启动）" },
+        @{ Path = (Join-Path $startMenu "$AppName.lnk"); Args = "gui"; Desc = "打开北通手柄电量（托盘与 HUD 会按上次设置自动启动）" }
     )
+
+    # 清理旧版本装出来的第二个快捷方式（升级安装时会残留）
+    foreach ($legacy in @((Join-Path $desktop "$AppName-设置.lnk"))) {
+        if (Test-Path $legacy) {
+            Remove-Item $legacy -Force -ErrorAction SilentlyContinue
+            Write-Ok "已移除旧版多余快捷方式：$(Split-Path $legacy -Leaf)"
+        }
+    }
     foreach ($t in $targets) {
         try {
             $lnk = $ws.CreateShortcut($t.Path)
@@ -247,7 +257,7 @@ if (-not $SkipShortcuts) {
             Write-Warn2 "创建 $($t.Path) 失败：$_"
         }
     }
-    Write-Ok "桌面与开始菜单快捷方式已创建"
+    Write-Ok "快捷方式已创建（桌面 1 个 + 开始菜单 1 个）"
 }
 
 # ---------------------------------------------------------------- 6. 注册卸载
