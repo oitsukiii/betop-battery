@@ -52,7 +52,7 @@ class TrayApp:
         self._settings = settings or Settings.load()
         # 默认用安全日志：打包成无控制台的 exe 后 print 会失败，那时自动写文件
         self._log = on_log or make_logger()
-        self._status = BatteryStatus(device_name="正在读取…")
+        self._status = BatteryStatus(device_name="正在读取…", timestamp=0.0)   # timestamp=0：保证任何真实读数都能覆盖占位状态
         self._icon = None
         self._stop = threading.Event()
         self._notified_low = False

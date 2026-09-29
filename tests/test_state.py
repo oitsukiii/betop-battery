@@ -81,3 +81,20 @@ def test_save_does_not_raise_when_directory_unusable(monkeypatch):
     """写入失败时静默（缓存不可用不应影响主功能）。"""
     monkeypatch.setattr(state, "config_dir", lambda: "/不存在/的/目录")
     state.save_status(state.SharedStatus(battery_percent=1))  # 不应抛异常
+
+
+def test_placeholder_status_must_have_zero_timestamp():
+    """占位状态的 timestamp 必须是 0。
+
+    三个界面启动时都会先用一个"读取中…"的占位状态。如果它的 timestamp 是
+    "现在"，那么任何比它早的真实读数（尤其是共享缓存里别人刚写的）都会被
+    ``latest.timestamp >= self._status.timestamp`` 这类判断拒绝，
+    界面就会一直停在"读取中…"—— 实测踩过这个坑。
+    """
+    import inspect
+
+    from betop_battery import gui, overlay, tray
+
+    for module in (gui, overlay, tray):
+        source = inspect.getsource(module)
+        assert 'timestamp=0.0' in source, f"{module.__name__} 的占位状态缺少 timestamp=0.0"

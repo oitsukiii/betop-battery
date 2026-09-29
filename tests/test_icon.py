@@ -120,3 +120,25 @@ def test_icon_style_from_empty_dict_uses_defaults():
     """空配置用默认值。"""
     assert IconStyle.from_dict(None) == IconStyle()
     assert IconStyle.from_dict({}) == IconStyle()
+
+
+# ---------------------------------------------------------------------------
+# HUD 图标语义
+# ---------------------------------------------------------------------------
+
+def test_emoji_for_charging_switches_icon():
+    """充电状态用图标表达：充电 ⚡、用电池 🔋。"""
+    from betop_battery.overlay import emoji_for
+
+    assert emoji_for(True) == "⚡"
+    assert emoji_for(False) == "🔋"
+    assert emoji_for(None) == "🔋", "状态未知时按用电池显示"
+
+
+def test_emoji_and_text_use_separate_fonts():
+    """中文与 emoji 必须用不同字体族，否则微软雅黑缺 emoji 字形会显示方框。"""
+    from betop_battery import overlay
+
+    assert overlay.EMOJI_FONT_FAMILY != overlay.TEXT_FONT_FAMILY
+    assert "YaHei" in overlay.TEXT_FONT_FAMILY, "中文默认用微软雅黑"
+    assert "Emoji" in overlay.EMOJI_FONT_FAMILY

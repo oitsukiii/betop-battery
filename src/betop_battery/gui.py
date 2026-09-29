@@ -44,11 +44,6 @@ STYLE_LABELS = {
 #: 刷新间隔预设（秒）—— 用下拉而不是自由输入，避免填出无意义的数值
 INTERVAL_PRESETS = (15, 30, 60, 120, 300, 600)
 
-#: HUD 显示内容的 emoji 预览（与 overlay.py 的取值保持一致）
-HUD_EMOJI_SAMPLE = "🎮 北通鲲鹏20   🔋 94%   ⚡ 充电中"
-HUD_PLAIN_SAMPLE = "北通鲲鹏20   94%   充电中"
-
-
 class ScrollableFrame(ttk.Frame):
     """带垂直滚动条的容器：窗口变小时内容不会被裁掉。"""
 
@@ -107,9 +102,10 @@ class SettingsWindow:
         self._reader = reader
         self._settings = settings or Settings.load()
         self._log = make_logger()
-        self._status = BatteryStatus(device_name="读取中…")
+        self._status = BatteryStatus(device_name="读取中…", timestamp=0.0)   # timestamp=0：保证任何真实读数都能覆盖占位状态
         self._queue: "queue.Queue[BatteryStatus]" = queue.Queue()
         self._stop_event = threading.Event()
+        self._hud_proc = None           # 由本界面启动的 HUD 进程（用于关闭时结束它）
         self._preview_image = None      # 必须持有引用，否则会被 GC 掉
         self._apply_job = None
         self._last_read_ts = 0.0        # 自己上次发起 HID 读取的时间
@@ -306,30 +302,24 @@ class SettingsWindow:
         checks = ttk.Frame(parent)
         checks.grid(row=5, column=0, columnspan=2, sticky="w", padx=32)
         for key, label in (("overlay_show_device", "型号"),
-                           ("overlay_show_battery", "电量"),
-                           ("overlay_show_charging", "充电状态")):
+                           ("overlay_show_battery", "电量")):
             self._vars[key] = tk.BooleanVar(value=getattr(self._settings, key))
             ttk.Checkbutton(checks, text=label, variable=self._vars[key],
                             command=self._schedule_apply).pack(side="left", padx=(0, 14))
 
-        self._vars["overlay_emoji"] = tk.BooleanVar(value=self._settings.overlay_emoji)
-        ttk.Checkbutton(parent, text="显示 emoji 图标（🎮 🔋 ⚡）",
-                        variable=self._vars["overlay_emoji"],
-                        command=self._on_emoji_toggle).grid(row=6, column=0, columnspan=2,
-                                                            sticky="w", padx=16, pady=(10, 0))
-        self._emoji_preview = ttk.Label(parent, text=HUD_EMOJI_SAMPLE,
-                                        font=("Segoe UI Emoji", 12))
-        self._emoji_preview.grid(row=7, column=0, columnspan=2, sticky="w", padx=32, pady=(2, 8))
+        ttk.Label(parent, text="充电状态始终展示：用电池显示 🔋，充电中显示 ⚡",
+                  foreground="#666", font=("Microsoft YaHei UI", 9)).grid(
+            row=6, column=0, columnspan=2, sticky="w", padx=32, pady=(6, 0))
 
         self._vars["overlay_click_through"] = tk.BooleanVar(
             value=self._settings.overlay_click_through)
         ttk.Checkbutton(parent, text="锁定布局（鼠标穿透，游戏时推荐；锁定后需先取消才能拖动）",
                         variable=self._vars["overlay_click_through"],
-                        command=self._schedule_apply).grid(row=8, column=0, columnspan=2,
-                                                           sticky="w", padx=16, pady=(6, 2))
+                        command=self._schedule_apply).grid(row=7, column=0, columnspan=2,
+                                                           sticky="w", padx=16, pady=(8, 2))
 
         colors = ttk.Frame(parent)
-        colors.grid(row=9, column=0, columnspan=2, sticky="w", padx=16, pady=(12, 0))
+        colors.grid(row=8, column=0, columnspan=2, sticky="w", padx=16, pady=(12, 0))
         ttk.Label(colors, text="背景色").pack(side="left")
         self._bg_btn = tk.Button(colors, width=4, bg=self._settings.overlay_bg,
                                  command=lambda: self._pick_color("overlay_bg", self._bg_btn))
@@ -340,14 +330,14 @@ class SettingsWindow:
         self._fg_btn.pack(side="left", padx=6)
 
         pos = ttk.Frame(parent)
-        pos.grid(row=10, column=0, columnspan=2, sticky="w", padx=16, pady=(14, 4))
-        ttk.Button(pos, text="位置复位到右下角", command=self._reset_hud_position).pack(side="left")
-        ttk.Label(pos, text="（也可以直接用鼠标拖动 HUD 到任意位置，位置会自动记住）",
+        pos.grid(row=9, column=0, columnspan=2, sticky="w", padx=16, pady=(14, 4))
+        ttk.Button(pos, text="复位", command=self._reset_hud_position).pack(side="left")
+        ttk.Label(pos, text="（初始位置在屏幕右下角；平时直接用鼠标拖动 HUD 即可，位置会自动记住）",
                   foreground="#888", font=("Microsoft YaHei UI", 8)).pack(side="left", padx=10)
 
         ttk.Label(parent, text="提示：若游戏以独占全屏运行，HUD 可能不可见 —— 请把游戏设为「无边框窗口」。",
                   foreground="#777", justify="left", wraplength=520).grid(
-            row=11, column=0, columnspan=2, sticky="w", padx=16, pady=(14, 12))
+            row=10, column=0, columnspan=2, sticky="w", padx=16, pady=(14, 12))
         parent.columnconfigure(1, weight=1)
 
     # ------------------------------------------------------------------ 数据
@@ -466,12 +456,6 @@ class SettingsWindow:
             button.configure(bg=chosen[1])
             self._schedule_apply()
 
-    def _on_emoji_toggle(self) -> None:
-        """emoji 开关：更新预览文本。"""
-        self._emoji_preview.configure(
-            text=HUD_EMOJI_SAMPLE if self._vars["overlay_emoji"].get() else HUD_PLAIN_SAMPLE)
-        self._schedule_apply()
-
     def _reset_hud_position(self) -> None:
         """把 HUD 位置设为自动（右下角）。
 
@@ -483,14 +467,26 @@ class SettingsWindow:
         self._flash_hint("已请求 HUD 复位到右下角")
 
     def _on_hud_toggle(self) -> None:
-        """勾选/取消"启用 HUD"。"""
+        """勾选/取消"启用 HUD"。
+
+        两条路一起走，确保真的生效：
+          1. 本界面记录并结束自己启动的 HUD 进程
+          2. HUD 自身也会检测到"启用 HUD"被关掉而退出
+             （即使它不是本界面启动的，例如由托盘或 exe 启动）
+        """
         enabled = bool(self._vars["overlay_enabled"].get())
         self._apply_now()
         if enabled:
-            spawn("overlay")
+            self._hud_proc = spawn("overlay")
             self._flash_hint("已启动 HUD")
         else:
-            self._flash_hint("已关闭 HUD 开关；正在运行的 HUD 可在其右键菜单退出")
+            if self._hud_proc is not None:
+                try:
+                    self._hud_proc.terminate()
+                except Exception:
+                    pass
+                self._hud_proc = None
+            self._flash_hint("已关闭 HUD")
 
     def _schedule_apply(self) -> None:
         """延迟一小会儿再落盘（滑杆拖动时避免频繁写文件）。"""
@@ -538,10 +534,8 @@ class SettingsWindow:
         s.overlay_enabled = bool(get("overlay_enabled", False))
         s.overlay_opacity = float(get("overlay_opacity", 0.78) or 0.78)
         s.overlay_font_size = int(get("overlay_font_size", 14) or 14)
-        s.overlay_emoji = bool(get("overlay_emoji", True))
         s.overlay_show_device = bool(get("overlay_show_device", True))
         s.overlay_show_battery = bool(get("overlay_show_battery", True))
-        s.overlay_show_charging = bool(get("overlay_show_charging", True))
         s.overlay_click_through = bool(get("overlay_click_through", False))
         # 位置只由"复位按钮"或 HUD 自身拖动决定，这里不覆盖 X/Y
 

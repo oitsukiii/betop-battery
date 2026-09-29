@@ -81,17 +81,11 @@ class Settings:
     overlay_click_through: bool = False
     """HUD 是否锁定布局（鼠标穿透，游戏时开启；同时无法拖动）。"""
 
-    overlay_emoji: bool = True
-    """HUD 是否显示 emoji 图标（🎮 🔋 ⚡）。若字体不支持可关闭。"""
-
     overlay_show_device: bool = True
     """HUD 是否显示手柄型号。"""
 
     overlay_show_battery: bool = True
     """HUD 是否显示电量。"""
-
-    overlay_show_charging: bool = True
-    """HUD 是否显示充电状态。"""
 
     overlay_bg: str = "#0E0E12"
     """HUD 背景色。"""
