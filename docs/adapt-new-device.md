@@ -110,7 +110,7 @@ betop-battery probe suggest
 
 ```json
 {
-  "id": "betop-oitsukiii",
+  "id": "betop-<型号简写>",
   "name": "北通<型号名>",
   "match": {
     "vendor_id": "0x20BC",

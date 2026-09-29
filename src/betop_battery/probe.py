@@ -305,7 +305,7 @@ def cmd_suggest(iface: HidInterface, descriptor: Optional[DeviceDescriptor],
 
     sample = " ".join(f"{b:02X}" for b in raws[0][:16])
     draft: dict[str, Any] = {
-        "id": "betop-oitsukiii",
+        "id": "betop-改成型号",
         "name": "北通<型号名>",
         "match": {
             "vendor_id": f"0x{iface.vendor_id:04X}",
