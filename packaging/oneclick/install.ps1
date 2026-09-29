@@ -47,7 +47,7 @@ if (-not (Test-Path (Join-Path $SourceRoot "run.py"))) {
 
 $AppName = "北通手柄电量"
 $AppId = "betop-battery"
-$Version = "1.1.0"
+$Version = "1.1.1"
 
 function Write-Step($text) { Write-Host ""; Write-Host "==> $text" -ForegroundColor Cyan }
 function Write-Ok($text) { Write-Host "    $text" -ForegroundColor Green }
