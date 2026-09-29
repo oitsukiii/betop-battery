@@ -4,6 +4,18 @@
 
 English · [简体中文](README.md)
 
+> ### 🤖 How this project was built
+>
+> This project was developed with **DeepSeek V4.1 Flash** driving
+> [**DeepSeek Harness (DSH)**](https://github.com/deepseek-ai/deepseek-harness)
+> in a **vibe coding** workflow — protocol reverse engineering, all code,
+> tests and docs included.
+>
+> The human author set the requirements, verified on real hardware and made
+> the calls; the exploration, coding, debugging and writing were done by the
+> AI inside DSH. We document this openly in the hope that it serves as a
+> reference sample of AI-assisted hardware tooling development.
+
 ---
 
 ## Why
@@ -33,7 +45,9 @@ Status  : charging
 
 - ✅ **Exact battery percentage** (the official client only gives you a color range)
 - ✅ **Charging state** detection
-- ✅ **Tray icon** showing the number, with a detailed hover tooltip
+- ✅ **Tray icon** showing the number, with a detailed hover tooltip (**3 styles**)
+- ✅ **Settings GUI**: live status, icon style, overlay config, live preview
+- ✅ **Overlay HUD**: a framerate-style on-screen battery bar — draggable, click-through capable
 - ✅ **Low-battery notification** (threshold and interval configurable)
 - ✅ **CLI mode** (`once` / `--json`) for scripting
 - ✅ **Data-driven**: adding a new model means adding one JSON file — no code changes
@@ -71,6 +85,8 @@ On Windows `pip install hidapi` installs a prebuilt wheel — **no C compiler ne
 betop-battery                    # read once (default)
 betop-battery once --json        # machine-readable
 betop-battery tray               # tray mode
+betop-battery gui                # settings window
+betop-battery overlay            # floating overlay HUD
 betop-battery devices            # list supported models
 betop-battery probe dump         # dump raw frames (debugging)
 betop-battery probe suggest      # draft a descriptor for a new model
@@ -88,6 +104,40 @@ betop-battery probe suggest      # draft a descriptor for a new model
 
 BETOP models share one **protocol family** (the same `report_id + (subcmd<<4|cmd)` frame layout),
 so adapting a new model usually means changing a few numbers. **PRs welcome!**
+
+## Settings GUI
+
+```bash
+betop-battery gui
+```
+
+Three tabs: **General** (interval, low-battery threshold, notifications, device filter),
+**Tray icon** (3 styles — number / ring / battery — color scheme, charging marker,
+with a live preview rendered from your real battery level), and **Overlay**
+(enable, opacity, font size, fields, click-through, position, colors).
+
+You can also open it from the tray menu: **right-click → 设置…**
+
+## Overlay HUD
+
+```bash
+betop-battery overlay
+```
+
+A semi-transparent bar pinned on screen, similar to a framerate overlay:
+
+```
+BETOP Kunpeng 20  ·  Battery 95%  ·  Battery mode
+```
+
+- **Drag with the mouse** to move it (position is remembered)
+- **Right-click menu**: refresh / click-through / toggle fields / reset position / close
+- **Click-through** (Windows): mouse events pass through, so it never blocks your game
+  - ⚠️ While enabled the window receives no mouse events; turn it off first to drag again
+- Opacity, font size and colors are configurable in the GUI
+
+> The overlay and the tray are **separate processes** — closing one does not affect the other.
+> If a game runs in exclusive fullscreen the overlay may be hidden; use borderless windowed mode.
 
 ## How it works
 
@@ -160,8 +210,35 @@ field offsets in the reply). The implementation here is **independent**.
 - It is **not affiliated with, endorsed by, or authorized by BETOP**
 - It only reads the state of **your own device**
 
+## ⚠️ Windows Smart App Control (important)
+
+Windows 11's **Smart App Control (SAC)** blocks **unsigned executables**, including one you
+just built yourself:
+
+```
+'betop-battery.exe' has been blocked by your organization's Device Guard policy
+```
+
+**This is a system policy, not a bug**: SAC only allows programs with a trusted signature.
+Check whether it is on:
+
+```powershell
+Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\CI\Policy' |
+  Select-Object VerifiedAndReputablePolicyState
+# 1 = enforced   0 = off   2 = evaluation
+```
+
+| Situation | Recommendation |
+|---|---|
+| Personal use | **Run from source** (`python run.py tray`) — the Python interpreter is signed and unaffected |
+| Distributing an exe | Requires **code signing**; OSS projects can apply to [SignPath Foundation](https://signpath.org/) for free signing |
+| Users hit the block | Point them to `pip install` / source; do **not** suggest disabling SAC (turning it off is irreversible without reinstalling Windows) |
+
+> Release attachments from GitHub also carry the "downloaded from the internet" mark, so SAC users are blocked there too.
+
 ## Known limitations
 
+- **Unsigned exe may be blocked by Smart App Control** (see above)
 - The controller must be awake (press a button)
 - The protocol may change with **firmware updates** — if it breaks, please open an issue with `probe dump` output
 - Verified on Windows 11 with the 2.4G dongle (Bluetooth mode untested)

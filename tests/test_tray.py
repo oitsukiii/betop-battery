@@ -4,12 +4,13 @@
 import pytest
 
 from betop_battery.reader import BatteryStatus
-from betop_battery.tray import (
+from betop_battery.icon import (
     COLOR_CHARGING,
     COLOR_LOW,
     COLOR_OK,
     COLOR_UNKNOWN,
     COLOR_WARN,
+    render_icon,
     pick_color,
 )
 
@@ -64,7 +65,5 @@ def test_render_icon_requires_pillow_but_does_not_crash_import():
         import PIL  # noqa: F401
     except ImportError:
         pytest.skip("未安装 Pillow")
-    from betop_battery.tray import render_icon
-
-    img = render_icon(BatteryStatus(battery_percent=88, charging=False), 20)
+    img = render_icon(BatteryStatus(battery_percent=88, charging=False))
     assert img.size == (64, 64)

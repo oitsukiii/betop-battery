@@ -86,3 +86,29 @@ def test_frame_is_immutable():
     frame = Frame(raw=b"\x02\x15", report_id=2, cmd=5, subcmd=1, payload=b"")
     with pytest.raises(Exception):
         frame.cmd = 9  # type: ignore[misc]
+
+
+# ---------------------------------------------------------------------------
+# 打包相关回归测试（真机打包时踩过的坑）
+# ---------------------------------------------------------------------------
+
+def test_packaging_entries_exist_and_use_absolute_import():
+    """打包入口必须放包外并用绝对导入。
+
+    原因：PyInstaller 把入口脚本当作顶层 __main__ 执行，此时它不属于任何包，
+    ``from .cli import main`` 会抛 "attempted relative import with no known parent package"。
+    """
+    import os
+    import re
+
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    entries = [os.path.join(root, "tools", "entry_cli.py"),
+               os.path.join(root, "tools", "entry_tray.py")]
+    for entry in entries:
+        assert os.path.isfile(entry), f"缺少打包入口 {entry}"
+        source = open(entry, encoding="utf-8").read()
+        # 不能出现 "from .xxx" / "from ..xxx" 这样的相对导入
+        assert not re.search(r"^\s*from\s+\.+", source, re.M), \
+            f"{os.path.basename(entry)} 使用了相对导入，打包后会崩溃"
+        assert "from betop_battery" in source, \
+            f"{os.path.basename(entry)} 应使用绝对导入"

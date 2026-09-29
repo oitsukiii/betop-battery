@@ -47,6 +47,55 @@ class Settings:
     device_id: str = ""
     """只读取指定型号（留空 = 自动）。"""
 
+    # ---------------------------------------------------------------- 图标外观
+
+    icon_style: str = "number"
+    """托盘图标样式：number（数字）/ ring（圆环）/ battery（电池）。"""
+
+    icon_scheme: str = "auto"
+    """配色方案：auto（按电量变色）/ mono（单色）。"""
+
+    icon_show_charging_marker: bool = True
+    """是否在图标上显示充电标记。"""
+
+    # ---------------------------------------------------------------- 叠加层
+
+    overlay_enabled: bool = False
+    """是否启用悬浮叠加层。"""
+
+    overlay_x: int = -1
+    """叠加层横坐标；-1 = 自动放到右下角。"""
+
+    overlay_y: int = -1
+    """叠加层纵坐标；-1 = 自动放到右下角。"""
+
+    overlay_opacity: float = 0.78
+    """叠加层不透明度（0.2~1.0）。"""
+
+    overlay_font_size: int = 14
+    """叠加层字号。"""
+
+    overlay_click_through: bool = False
+    """是否让鼠标穿透叠加层（游戏时开启，避免挡住操作）。"""
+
+    overlay_show_device: bool = True
+    """叠加层是否显示手柄型号。"""
+
+    overlay_show_battery: bool = True
+    """叠加层是否显示电量。"""
+
+    overlay_show_charging: bool = True
+    """叠加层是否显示充电状态。"""
+
+    overlay_refresh_seconds: int = 30
+    """叠加层自身的刷新间隔（秒）。"""
+
+    overlay_bg: str = "#0E0E12"
+    """叠加层背景色。"""
+
+    overlay_fg: str = "#FFFFFF"
+    """叠加层文字颜色。"""
+
     @classmethod
     def load(cls) -> "Settings":
         """从磁盘读取；文件不存在或损坏时返回默认值。"""
@@ -61,6 +110,17 @@ class Settings:
             return cls()
         known = {f for f in cls.__dataclass_fields__}
         return cls(**{k: v for k, v in data.items() if k in known})
+
+    def icon_style_object(self) -> "IconStyle":
+        """把图标相关字段组装成 IconStyle（延迟导入避免循环依赖）。"""
+        from .icon import IconStyle
+
+        return IconStyle.from_dict({
+            "style": self.icon_style,
+            "scheme": self.icon_scheme,
+            "show_charging_marker": self.icon_show_charging_marker,
+            "low_threshold": self.low_battery_threshold,
+        })
 
     def save(self) -> None:
         """写回磁盘（失败静默 —— 设置保存不了不应影响主功能）。"""

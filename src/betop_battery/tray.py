@@ -3,10 +3,12 @@
 
 职责边界（高内聚）
 ------------------
-本模块**只负责展示与交互**：把 :class:`~betop_battery.reader.BatteryStatus`
-渲染成图标/菜单/通知。它不碰 HID、不认识协议、也不知道字段偏移。
+本模块只负责**托盘交互与生命周期**：图标、菜单、通知、后台轮询。
+图标**怎么画**在 :mod:`.icon`（纯函数、可单测），
+电量**怎么读**在 :mod:`.reader`，本模块不碰 HID、不认识协议。
 
-因此它可以在没有手柄的环境下被导入与单测（图标渲染逻辑是纯函数）。
+图形设置界面是**独立进程**（``betop-battery gui``），由菜单项拉起 ——
+tkinter 要求 GUI 跑在主线程，与托盘的事件循环同处一个进程会互相打架。
 """
 
 from __future__ import annotations
@@ -16,106 +18,21 @@ import time
 from typing import Callable, Optional
 
 from .config import Settings
+from .icon import ICON_SIZE, render_icon
+from .log import make_logger
+from .proc import spawn
 from .reader import BatteryReader, BatteryStatus
 
-# 托盘图标尺寸（Windows 通知区域推荐 16/32，取 64 更清晰，系统会缩放）
-ICON_SIZE = 64
 
-COLOR_OK = (34, 139, 34)        # 绿色：电量充足
-COLOR_WARN = (218, 165, 32)     # 黄色：中等
-COLOR_LOW = (200, 40, 40)       # 红色：低电量
-COLOR_CHARGING = (30, 120, 220)  # 蓝色：充电中
-COLOR_UNKNOWN = (120, 120, 120)  # 灰色：读不到
-
-
-def _require_pil():
-    """只加载 Pillow（绘制图标需要它，但不需要 pystray）。
-
-    这样即使没装 pystray，图标渲染逻辑也能被单独测试。
-    """
-    try:
-        from PIL import Image, ImageDraw, ImageFont
-    except ImportError as exc:  # pragma: no cover
-        raise RuntimeError("绘制图标需要 Pillow：pip install Pillow") from exc
-    return Image, ImageDraw, ImageFont
-
-
-def _require_gui():
-    """托盘模式需要的全部依赖（pystray + Pillow）。"""
+def _require_pystray():
+    """加载 pystray（仅托盘模式需要）。"""
     try:
         import pystray
     except ImportError as exc:  # pragma: no cover
         raise RuntimeError(
             "托盘模式需要 pystray 与 Pillow：pip install pystray Pillow"
         ) from exc
-    Image, ImageDraw, ImageFont = _require_pil()
-    return pystray, Image, ImageDraw, ImageFont
-
-
-def pick_color(status: BatteryStatus, low_threshold: int) -> tuple[int, int, int]:
-    """根据状态选图标颜色（纯函数，便于测试）。"""
-    if status.error or status.battery_percent is None:
-        return COLOR_UNKNOWN
-    if status.charging:
-        return COLOR_CHARGING
-    if status.battery_percent <= low_threshold:
-        return COLOR_LOW
-    if status.battery_percent <= 50:
-        return COLOR_WARN
-    return COLOR_OK
-
-
-def render_icon(status: BatteryStatus, low_threshold: int = 20):
-    """把状态渲染成一张 PIL 图片（数字 + 颜色）。
-
-    Args:
-        status:        读取结果
-        low_threshold: 低电量阈值（影响配色）
-
-    Returns:
-        PIL.Image（RGBA）
-    """
-    Image, ImageDraw, ImageFont = _require_pil()
-    color = pick_color(status, low_threshold)
-    img = Image.new("RGBA", (ICON_SIZE, ICON_SIZE), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(img)
-
-    # 圆角底
-    draw.rounded_rectangle([2, 2, ICON_SIZE - 2, ICON_SIZE - 2], radius=12, fill=color)
-
-    if status.battery_percent is None:
-        text = "--"
-    else:
-        text = str(status.battery_percent)
-
-    # 挑一个能放下的字号
-    font = None
-    for size in (34, 30, 26, 22, 18):
-        try:
-            font = ImageFont.truetype("arialbd.ttf", size)
-            break
-        except Exception:
-            font = None
-    if font is None:
-        try:
-            font = ImageFont.load_default()
-        except Exception:
-            font = None
-
-    if font is not None:
-        try:
-            box = draw.textbbox((0, 0), text, font=font)
-            tw, th = box[2] - box[0], box[3] - box[1]
-            draw.text(((ICON_SIZE - tw) / 2 - box[0], (ICON_SIZE - th) / 2 - box[1]),
-                      text, font=font, fill=(255, 255, 255, 255))
-        except Exception:
-            draw.text((12, 16), text, fill=(255, 255, 255, 255))
-
-    # 充电中画一条闪电状的横条做提示
-    if status.charging:
-        draw.rectangle([10, ICON_SIZE - 12, ICON_SIZE - 10, ICON_SIZE - 8],
-                       fill=(255, 255, 255, 220))
-    return img
+    return pystray
 
 
 class TrayApp:
@@ -124,14 +41,15 @@ class TrayApp:
     Args:
         reader:   电量读取器
         settings: 用户设置（会被就地更新并保存）
-        on_log:   可选的日志回调（默认 print）
+        on_log:   可选的日志回调（默认写控制台或日志文件）
     """
 
     def __init__(self, reader: BatteryReader, settings: Optional[Settings] = None,
                  on_log: Optional[Callable[[str], None]] = None) -> None:
         self._reader = reader
         self._settings = settings or Settings.load()
-        self._log = on_log or print
+        # 默认用安全日志：打包成无控制台的 exe 后 print 会失败，那时自动写文件
+        self._log = on_log or make_logger()
         self._status = BatteryStatus(device_name="正在读取…")
         self._icon = None
         self._stop = threading.Event()
@@ -141,10 +59,10 @@ class TrayApp:
 
     def run(self) -> int:
         """启动托盘（阻塞直到用户退出）。"""
-        pystray, _, _, _ = _require_gui()
+        pystray = _require_pystray()
         self._icon = pystray.Icon(
             "betop-battery",
-            icon=render_icon(self._status, self._settings.low_battery_threshold),
+            icon=self._render_icon(),
             title="北通手柄电量",
             menu=self._build_menu(),
         )
@@ -159,7 +77,6 @@ class TrayApp:
         """后台轮询循环：定时读取并刷新图标。"""
         while not self._stop.is_set():
             self.refresh()
-            # 可被 refresh 中的设置变更影响，所以每轮重新读取间隔
             self._stop.wait(max(5, int(self._settings.poll_seconds)))
 
     def refresh(self) -> BatteryStatus:
@@ -173,12 +90,16 @@ class TrayApp:
 
     # -- 界面更新 ---------------------------------------------------------
 
+    def _render_icon(self):
+        """按当前设置渲染托盘图标。"""
+        return render_icon(self._status, self._settings.icon_style_object(), ICON_SIZE)
+
     def _update_icon(self) -> None:
         """把当前状态画到托盘图标上。"""
         if self._icon is None:
             return
         try:
-            self._icon.icon = render_icon(self._status, self._settings.low_battery_threshold)
+            self._icon.icon = self._render_icon()
             self._icon.title = self._tooltip()
         except Exception as exc:  # pragma: no cover
             self._log(f"刷新图标失败：{exc}")
@@ -220,7 +141,7 @@ class TrayApp:
 
     def _build_menu(self):
         """构造右键菜单。"""
-        pystray, _, _, _ = _require_gui()
+        pystray = _require_pystray()
 
         def set_interval(seconds: int):
             def handler(icon, item):
@@ -244,6 +165,21 @@ class TrayApp:
 
         def do_refresh(icon, item):
             self.refresh()
+
+        def open_settings(icon, item):
+            """打开图形设置界面（独立进程）。"""
+            if spawn("gui") is None:
+                self._log("打开设置界面失败（可能是缺少 tkinter）")
+
+        def toggle_overlay(icon, item):
+            """一键启动叠加层，并把状态写进设置。"""
+            self._settings.overlay_enabled = not self._settings.overlay_enabled
+            self._settings.save()
+            if self._settings.overlay_enabled:
+                spawn("overlay")
+                self._log("已启动叠加层")
+            else:
+                self._log("已关闭叠加层开关（正在运行的叠加层可在其右键菜单里退出）")
 
         def do_quit(icon, item):
             self._stop.set()
@@ -273,6 +209,13 @@ class TrayApp:
         )
         return pystray.Menu(
             pystray.MenuItem("立即刷新", do_refresh, default=True),
+            pystray.MenuItem("设置…", open_settings),
+            pystray.MenuItem(
+                "叠加层",
+                toggle_overlay,
+                checked=lambda item: self._settings.overlay_enabled,
+            ),
+            pystray.Menu.SEPARATOR,
             pystray.MenuItem("刷新间隔", interval_menu),
             pystray.MenuItem("低电量提醒", threshold_menu),
             pystray.MenuItem(
@@ -285,6 +228,16 @@ class TrayApp:
         )
 
 
-def run_tray(reader: BatteryReader, settings: Optional[Settings] = None) -> int:
-    """便捷入口：直接启动托盘。"""
-    return TrayApp(reader, settings).run()
+def run_tray(reader: BatteryReader, settings: Optional[Settings] = None,
+             on_log: Optional[Callable[[str], None]] = None) -> int:
+    """便捷入口：直接启动托盘。
+
+    Args:
+        reader:   电量读取器
+        settings: 用户设置
+        on_log:   日志回调（默认写控制台，无控制台时写文件）
+
+    Returns:
+        退出码。
+    """
+    return TrayApp(reader, settings, on_log=on_log).run()

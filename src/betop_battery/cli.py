@@ -6,6 +6,8 @@
     betop-battery                读一次电量并打印（默认）
     betop-battery once           同上，可加 --json
     betop-battery tray           启动托盘图标（通知区域）
+    betop-battery gui            打开图形设置界面
+    betop-battery overlay        启动悬浮叠加层（HUD）
     betop-battery devices        列出已支持的型号
     betop-battery list           列出系统上的 HID 接口
     betop-battery probe <子命令> 调试工具（适配新型号用）
@@ -40,6 +42,7 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--device", default="", help="只使用指定型号 id（见 devices 命令）")
     parser.add_argument("--version", action="version", version=_version_text())
+    parser.add_argument("--debug", action="store_true", help="出错时打印完整堆栈（调试用）")
 
     sub = parser.add_subparsers(dest="command")
 
@@ -52,6 +55,16 @@ def _build_parser() -> argparse.ArgumentParser:
     p_tray = sub.add_parser("tray", help="启动系统托盘图标")
     p_tray.add_argument("--interval", type=int, default=None, help="刷新间隔秒数")
     p_tray.add_argument("--threshold", type=int, default=None, help="低电量阈值百分比")
+
+    # gui ------------------------------------------------------------------
+    sub.add_parser("gui", help="打开图形设置界面（含图标样式与叠加层设置）")
+
+    # overlay --------------------------------------------------------------
+    p_ov = sub.add_parser("overlay", help="启动悬浮叠加层（类似帧数 HUD）")
+    p_ov.add_argument("--opacity", type=float, default=None, help="不透明度 0.2~1.0")
+    p_ov.add_argument("--font-size", type=int, default=None, dest="font_size", help="字号")
+    p_ov.add_argument("--click-through", action="store_true", default=None,
+                      dest="click_through", help="鼠标穿透（游戏时推荐）")
 
     # devices --------------------------------------------------------------
     sub.add_parser("devices", help="列出已支持的型号")
@@ -145,14 +158,58 @@ def cmd_tray(args) -> int:
 
     reader = _make_reader(settings.device_id or args.device)
     try:
+        from .log import log_file_path, make_logger
         from .tray import run_tray
     except Exception as exc:
         print(f"✗ 无法加载托盘组件：{exc}")
         return EXIT_FAIL
+    logger = make_logger()
+    logger(f"日志位置：{log_file_path()}")
     try:
-        return run_tray(reader, settings)
+        return run_tray(reader, settings, on_log=logger)
     except RuntimeError as exc:
         print(f"✗ {exc}")
+        return EXIT_FAIL
+
+
+def cmd_gui(args) -> int:
+    """打开图形设置界面。"""
+    settings = Settings.load()
+    reader = _make_reader(settings.device_id or args.device)
+    try:
+        from .gui import run_gui
+    except Exception as exc:
+        print(f"✗ 无法加载图形界面（需要 tkinter）：{exc}")
+        return EXIT_FAIL
+    try:
+        return run_gui(reader, settings)
+    except Exception as exc:
+        print(f"✗ 图形界面启动失败：{exc}")
+        return EXIT_FAIL
+
+
+def cmd_overlay(args) -> int:
+    """启动叠加层（命令行参数会覆盖配置并保存）。"""
+    settings = Settings.load()
+    if args.opacity is not None:
+        settings.overlay_opacity = args.opacity
+    if args.font_size is not None:
+        settings.overlay_font_size = args.font_size
+    if args.click_through:
+        settings.overlay_click_through = True
+    settings.overlay_enabled = True
+    settings.save()
+
+    reader = _make_reader(settings.device_id or args.device)
+    try:
+        from .overlay import run_overlay
+    except Exception as exc:
+        print(f"✗ 无法加载叠加层（需要 tkinter）：{exc}")
+        return EXIT_FAIL
+    try:
+        return run_overlay(reader, settings)
+    except Exception as exc:
+        print(f"✗ 叠加层启动失败：{exc}")
         return EXIT_FAIL
 
 
@@ -246,6 +303,11 @@ def main(argv: Optional[list[str]] = None) -> int:
     Returns:
         进程退出码。
     """
+    # 中文 Windows 上防止输出重定向时因编码崩溃（详见 log.prepare_output）
+    from .log import prepare_output
+
+    prepare_output()
+
     parser = _build_parser()
     args = parser.parse_args(argv)
 
@@ -255,6 +317,10 @@ def main(argv: Optional[list[str]] = None) -> int:
             return cmd_once(args)
         if command == "tray":
             return cmd_tray(args)
+        if command == "gui":
+            return cmd_gui(args)
+        if command == "overlay":
+            return cmd_overlay(args)
         if command == "devices":
             return cmd_devices(args)
         if command == "list":
