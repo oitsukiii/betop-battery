@@ -20,6 +20,33 @@ English · [简体中文](README.md)
 
 ![BETOP Kunpeng 20 with betop-battery](docs/images/hero.jpg)
 
+---
+
+## Table of contents
+
+- [Why](#why)
+- [Features](#features)
+- [Quick start](#quick-start)
+  - [Option 1: One-click installer ⭐ best for non-developers](#option-1-one-click-installer-best-for-non-developers)
+  - [Option 2: Prebuilt binaries (no Python needed)](#option-2-prebuilt-binaries-no-python-needed)
+  - [Option 3: From source (developers)](#option-3-from-source-developers)
+  - [CLI](#cli)
+- [How it works & adapting](#how-it-works-adapting)
+  - [How it works](#how-it-works)
+  - [Supported controllers](#supported-controllers)
+  - [Adding a new model](#adding-a-new-model)
+- [Interface](#interface)
+  - [Settings GUI](#settings-gui)
+  - [HUD](#hud)
+  - [Screenshots](#screenshots)
+  - [HUD screenshots](#hud-screenshots)
+- [Known limitations](#known-limitations)
+  - [Windows Smart App Control](#windows-smart-app-control)
+- [Contributing](#contributing)
+- [License](#license)
+
+---
+
 ## Why
 
 BETOP's official client **does not show an exact battery percentage** — it only maps LED colors to ranges:
@@ -42,6 +69,7 @@ No official client required.
 Battery : 100%
 Status  : charging
 ```
+---
 
 ## Features
 
@@ -58,6 +86,7 @@ Status  : charging
   written, no firmware is flashed, no game process is touched — so there is no risk of
   damaging the controller or being flagged as a cheat.
 - ✅ **Built-in `probe` tooling** so you can adapt your own controller
+---
 
 ## Quick start
 
@@ -122,8 +151,35 @@ betop-battery probe suggest      # draft a descriptor for a new model
 
 > **Tip:** if the controller is asleep, press any button and retry.
 > The official client can stay open — it does not conflict.
+---
 
-## Supported controllers
+## How it works & adapting
+
+### How it works
+
+```
+1. find the vendor interface   2. send a status query      3. read fields from the reply
+   usage_page = 0xFF00            02 15  (cmd=5, subcmd=1)     byte[2]        = battery 0..100
+                                                               byte[4] & 0x0F = charging flag
+```
+
+A real captured frame:
+
+```
+02 15 64 00 51 01 01 00 ...
+│  │  │  │  │
+│  │  │  │  └─ byte[4] & 0x0F = 1  → charging
+│  │  │  └──── byte[3]
+│  │  └─────── byte[2] = 0x64 = 100 → 100%
+│  └────────── header = (subcmd 0x1 << 4) | cmd 0x5 → "status report"
+└───────────── report_id = 0x02
+```
+
+Full frame spec, command table and field semantics: **[docs/protocol.md](docs/protocol.md)**
+
+
+
+### Supported controllers
 
 | Model | Status | Connection | Contributor |
 |---|---|---|---|
@@ -133,7 +189,25 @@ betop-battery probe suggest      # draft a descriptor for a new model
 BETOP models share one **protocol family** (the same `report_id + (subcmd<<4|cmd)` frame layout),
 so adapting a new model usually means changing a few numbers. **PRs welcome!**
 
-## Settings GUI
+
+
+### Adding a new model
+
+```bash
+betop-battery probe interfaces   # find the vendor interface (usage_page 0xFF00)
+betop-battery probe dump         # dump frames; the tool highlights likely battery bytes
+betop-battery probe watch        # plug/unplug the charger to spot changing bytes
+betop-battery probe suggest      # auto-draft a descriptor
+betop-battery once               # verify
+```
+
+Step-by-step tutorial: **[docs/adapt-new-device.md](docs/adapt-new-device.md)**
+(Chinese; AI agents should read **[AGENTS.md](AGENTS.md)** instead.)
+---
+
+## Interface
+
+### Settings GUI
 
 ```bash
 betop-battery gui
@@ -146,7 +220,9 @@ with a live preview rendered from your real battery level), and **Overlay**
 
 You can also open it from the tray menu: **right-click → 设置…**
 
-## HUD (floating overlay)
+
+
+### HUD
 
 ```bash
 betop-battery overlay
@@ -189,79 +265,31 @@ BETOP Kunpeng 20  ·  Battery 95%  ·  Battery mode
 Compact mode (model hidden in the settings):
 
 ![HUD battery only](docs/images/hud-compact.png)
+---
 
-## How it works
+## Known limitations
 
-```
-1. find the vendor interface   2. send a status query      3. read fields from the reply
-   usage_page = 0xFF00            02 15  (cmd=5, subcmd=1)     byte[2]        = battery 0..100
-                                                               byte[4] & 0x0F = charging flag
-```
+- **The controller reports 100% while charging.** This is the device's own
+  reading, not a parsing bug — captured raw frames:
 
-A real captured frame:
+  | State | frame | `byte[2]` |
+  |---|---|---|
+  | on battery | `02 15 5D 00 50 …` | `0x5D` = **93%** |
+  | charging | `02 15 64 00 51 …` | `0x64` = **100%** |
 
-```
-02 15 64 00 51 01 01 00 ...
-│  │  │  │  │
-│  │  │  │  └─ byte[4] & 0x0F = 1  → charging
-│  │  │  └──── byte[3]
-│  │  └─────── byte[2] = 0x64 = 100 → 100%
-│  └────────── header = (subcmd 0x1 << 4) | cmd 0x5 → "status report"
-└───────────── report_id = 0x02
-```
+  We read `byte[2]` exactly the way the vendor client does, so this is
+  device-side (the charging circuit raises the measured voltage) and cannot be
+  fixed in software. Use the ⚡ charging icon rather than that 100%.
+- ⚠️ **Single controller only**: the app picks one matching interface and reads that one.
+  With several controllers connected, behaviour may be unexpected. Multi-controller support
+  is not implemented yet — feel free to open an issue describing your setup.
+- **Unsigned exe may be blocked by Smart App Control** (see above)
+- The controller must be awake (press a button)
+- The protocol may change with **firmware updates** — if it breaks, please open an issue with `probe dump` output
+- Verified on Windows 11 with the 2.4G dongle (Bluetooth mode untested)
+- Some firmwares are picky about **write length**; configurable per device
 
-Full frame spec, command table and field semantics: **[docs/protocol.md](docs/protocol.md)**
-
-## Add support for your controller (usually one JSON file)
-
-```bash
-betop-battery probe interfaces   # find the vendor interface (usage_page 0xFF00)
-betop-battery probe dump         # dump frames; the tool highlights likely battery bytes
-betop-battery probe watch        # plug/unplug the charger to spot changing bytes
-betop-battery probe suggest      # auto-draft a descriptor
-betop-battery once               # verify
-```
-
-Step-by-step tutorial: **[docs/adapt-new-device.md](docs/adapt-new-device.md)**
-(Chinese; AI agents should read **[AGENTS.md](AGENTS.md)** instead.)
-
-## Project layout
-
-```
-src/betop_battery/
-├── protocol.py    frame encode/decode (pure functions, no I/O)
-├── transport.py   HID I/O (knows bytes, not models)
-├── devices.py     device descriptors (JSON-driven)
-├── reader.py      orchestration
-├── probe.py       debugging / discovery tooling
-├── tray.py        tray UI (presentation only)
-├── config.py      user settings
-└── cli.py         command dispatch
-```
-
-Layering follows **high cohesion, low coupling**: `transport` knows nothing about BETOP,
-`tray` knows nothing about HID, and adding a device only touches `devices/*.json`.
-
-## Tests
-
-```bash
-pip install -e ".[dev]"
-pytest -q
-```
-
-Unit tests require **no hardware** — they validate field offsets against a real captured frame.
-
-## How was the protocol obtained?
-
-Through **interoperability analysis**: observing how the official Electron client communicates
-with the receiver (its UI logic is shipped as JavaScript, which defines the query command and the
-field offsets in the reply). The implementation here is **independent**.
-
-- This project contains **no vendor code, binaries or assets**
-- It is **not affiliated with, endorsed by, or authorized by BETOP**
-- It only reads the state of **your own device**
-
-## ⚠️ Windows Smart App Control (important)
+### Windows Smart App Control
 
 Windows 11's **Smart App Control (SAC)** blocks **unsigned executables**, including one you
 just built yourself:
@@ -286,28 +314,7 @@ Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\CI\Policy' |
 | Users hit the block | Point them to `pip install` / source; do **not** suggest disabling SAC (turning it off is irreversible without reinstalling Windows) |
 
 > Release attachments from GitHub also carry the "downloaded from the internet" mark, so SAC users are blocked there too.
-
-## Known limitations
-
-- **The controller reports 100% while charging.** This is the device's own
-  reading, not a parsing bug — captured raw frames:
-
-  | State | frame | `byte[2]` |
-  |---|---|---|
-  | on battery | `02 15 5D 00 50 …` | `0x5D` = **93%** |
-  | charging | `02 15 64 00 51 …` | `0x64` = **100%** |
-
-  We read `byte[2]` exactly the way the vendor client does, so this is
-  device-side (the charging circuit raises the measured voltage) and cannot be
-  fixed in software. Use the ⚡ charging icon rather than that 100%.
-- ⚠️ **Single controller only**: the app picks one matching interface and reads that one.
-  With several controllers connected, behaviour may be unexpected. Multi-controller support
-  is not implemented yet — feel free to open an issue describing your setup.
-- **Unsigned exe may be blocked by Smart App Control** (see above)
-- The controller must be awake (press a button)
-- The protocol may change with **firmware updates** — if it breaks, please open an issue with `probe dump` output
-- Verified on Windows 11 with the 2.4G dongle (Bluetooth mode untested)
-- Some firmwares are picky about **write length**; configurable per device
+---
 
 ## Contributing
 
@@ -316,6 +323,7 @@ Very welcome — especially **descriptors for other BETOP models**. No coding re
 - [Adapt a new model](docs/adapt-new-device.md)
 - [Protocol spec](docs/protocol.md)
 - Issues and PRs in Chinese or English
+---
 
 ## License
 
